@@ -1,6 +1,0 @@
-
-# Create a file named terraform.tfvars (Ignored in .gitignore) in /terraform direcroy in your local repo with the needed TF variables: 
-# TF_VARS: 
-
-# Key pair for the EC2 instances
-aws_key_pair               = <EXAMPLE>

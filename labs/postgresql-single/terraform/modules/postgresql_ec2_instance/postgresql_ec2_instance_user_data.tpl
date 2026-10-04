@@ -5,10 +5,9 @@
 # Hostname and /etc/hosts configuration: 
 ##################################################################
 
-# Switch to root user: 
-sudo su - root
+# Note: cloud-init already runs user_data as root.
 
-# Set hostname: 
+# Set hostname:
 HOSTNAME="postgresql-source"
 sudo hostnamectl set-hostname "$HOSTNAME"
 
@@ -57,14 +56,15 @@ sudo dnf -y install percona-pg_repack17
 # Initialize PostgreSQL database
 /usr/pgsql-17/bin/postgresql-17-setup initdb
 
+# Set PostgreSQL to listen on all interfaces (before the first start, so no restart is needed):
+sudo sed -i "s/#listen_addresses = 'localhost'/listen_addresses = '*'/g" $PG_CONF
+
+# Allow remote connections from inside the VPC with password (scram-sha-256) auth by modifying pg_hba.conf:
+echo "host    all             all             ${vpc_cidr_block}             scram-sha-256" | sudo tee -a $PG_HBA
+
 # Enable and start PostgreSQL service
 sudo systemctl enable postgresql-17
 sudo systemctl start postgresql-17
-
-# Set PostgreSQL to listen on all interfaces
-sudo sed -i "s/#listen_addresses = 'localhost'/listen_addresses = '*'/g" $PG_CONF
-
-# Allow remote connections by modifying pg_hba.conf: 
 
 # Give postgres user sudo privileges: 
 echo "postgres ALL=(ALL) NOPASSWD: ALL" | sudo tee /etc/sudoers.d/postgres
@@ -78,11 +78,11 @@ echo "postgres ALL=(ALL) NOPASSWD: ALL" | sudo tee /etc/sudoers.d/postgres
 # Create dir for the repo:
 sudo mkdir -p /tmp/repo
 
-# Download GitHub repo to /tmp directory 
-sudo git clone https://github.com/xXSAPXx/PostgreSQL_Playground.git /tmp/repo
+# Download GitHub repo to /tmp directory (repo + branch passed from Terraform):
+sudo git clone --branch "${repo_branch}" "${repo_url}" /tmp/repo
 
-# Copy all scripts to /opt/ directory
-sudo cp -r /tmp/repo/Scripts/* /opt/
+# Copy this lab's scripts to /opt/ directory
+sudo cp -r /tmp/repo/labs/postgresql-single/scripts/* /opt/
 
 # Set execute permissions for all scripts in /opt/ directory:
 sudo chmod +x /opt/*.sh

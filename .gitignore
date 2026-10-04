@@ -1,20 +1,21 @@
 
 ##################### Terraform Ignore ######################
+# Patterns apply to every lab (labs/<lab>/terraform/) and module.
 
-# Ignore tfvars.file
-IaC/terraform/*.tfvars
+# Ignore tfvars.file (terraform.tfvars.example stays tracked)
+*.tfvars
 
 # Ignore Terraform working directory
-IaC/terraform/.terraform/
+.terraform/
 
 # Ignore Terraform state files
-IaC/terraform/*.tfstate
-IaC/terraform/*.tfstate.backup
+*.tfstate
+*.tfstate.backup
 
 # Ignore crash logs, plan and lock files
-IaC/terraform/crash.log
-IaC/terraform/tfplan
-IaC/terraform/.terraform.lock.hcl
+crash.log
+tfplan
+.terraform.lock.hcl
 
 
 

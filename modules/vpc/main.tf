@@ -2,27 +2,28 @@
 
 ###################################################################################
 # Create a VPC / 1_Public_Subnet and 2 Private Subnets NAT + Internet_Gateway
+# Shared by all labs: every Name tag is prefixed with var.name (the lab name).
 ###################################################################################
 
-# Create the VPC: 
-resource "aws_vpc" "postgresql_vpc" {
+# Create the VPC:
+resource "aws_vpc" "vpc" {
   cidr_block           = var.vpc_cidr_block
   enable_dns_support   = true
   enable_dns_hostnames = true
   tags = {
-    Name = var.vpc_name
+    Name = "${var.name}-vpc"
   }
 }
 
 
 # Create a Public_Subnet:
 resource "aws_subnet" "public_subnet_1" {
-  vpc_id                  = aws_vpc.postgresql_vpc.id
+  vpc_id                  = aws_vpc.vpc.id
   cidr_block              = var.public_subnet_1_cidr
-  availability_zone       = var.availability_zone_1   # Replace with your preferred AZ
-  map_public_ip_on_launch = true                      # Enable this to auto-assign public IPs
+  availability_zone       = var.availability_zone_1 # Replace with your preferred AZ
+  map_public_ip_on_launch = true                    # Enable this to auto-assign public IPs
   tags = {
-    Name = "Public_Subnet_PMM_IaC"
+    Name = "${var.name}-public-subnet-1"
   }
 }
 
@@ -30,30 +31,37 @@ resource "aws_subnet" "public_subnet_1" {
 
 # Create an internet gateway:
 resource "aws_internet_gateway" "igw" {
-  vpc_id = aws_vpc.postgresql_vpc.id
+  vpc_id = aws_vpc.vpc.id
   tags = {
-    Name = "Internet_Gateway_IaC"
+    Name = "${var.name}-igw"
   }
 }
 
 
 
 ##################################################################
-# Create NAT GATEWAY in the public subnet: 
+# Create NAT GATEWAY in the public subnet:
 ##################################################################
 
-# NAT Gateway in the public subnet: 
+# NAT Gateway in the public subnet:
 resource "aws_eip" "nat_eip" {
   domain = "vpc"
+  tags = {
+    Name = "${var.name}-nat-eip"
+  }
 }
 
 resource "aws_nat_gateway" "nat" {
   allocation_id = aws_eip.nat_eip.id
 
- 
-  # Create the NAT In the Public Subnet: 
+
+  # Create the NAT In the Public Subnet:
   subnet_id  = aws_subnet.public_subnet_1.id
   depends_on = [aws_internet_gateway.igw]
+
+  tags = {
+    Name = "${var.name}-nat"
+  }
 }
 
 
@@ -64,36 +72,36 @@ resource "aws_nat_gateway" "nat" {
 
 # Create a Private_Subnet_1:
 resource "aws_subnet" "private_subnet_1" {
-  vpc_id                  = aws_vpc.postgresql_vpc.id
-  cidr_block              = var.private_subnet_1_cidr   # Make sure the CIDR block doesn't overlap with the public subnet
-  availability_zone       = var.availability_zone_1     # Same AZ as the first public subnet
-  map_public_ip_on_launch = false                       # DO NOT Auto-assign public IPs!
+  vpc_id                  = aws_vpc.vpc.id
+  cidr_block              = var.private_subnet_1_cidr # Make sure the CIDR block doesn't overlap with the public subnet
+  availability_zone       = var.availability_zone_1   # Same AZ as the first public subnet
+  map_public_ip_on_launch = false                     # DO NOT Auto-assign public IPs!
   tags = {
-    Name = "Private_Subnet_1_PG_IaC"
+    Name = "${var.name}-private-subnet-1"
   }
 }
 
 # Create a Private_Subnet_2:
 resource "aws_subnet" "private_subnet_2" {
-  vpc_id                  = aws_vpc.postgresql_vpc.id
+  vpc_id                  = aws_vpc.vpc.id
   cidr_block              = var.private_subnet_2_cidr # Make sure the CIDR block doesn't overlap with the public subnet
-  availability_zone       = var.availability_zone_2   # Same AZ as the private and public subnet
+  availability_zone       = var.availability_zone_2   # Second AZ (for replicas / HA nodes)
   map_public_ip_on_launch = false                     # DO NOT Auto-assign public IPs!
   tags = {
-    Name = "Private_Subnet_2_PG_IaC"
+    Name = "${var.name}-private-subnet-2"
   }
 }
 
 
 ##############################################################################
-# Create Route_Tables for both public and private subnets: 
+# Create Route_Tables for both public and private subnets:
 ##############################################################################
 
 
 ############### PUBLIC ROUTING TABLE and SUBNETS: ###############
-# All traffic from the public subnet is going to the Internet Gateway: 
+# All traffic from the public subnet is going to the Internet Gateway:
 resource "aws_route_table" "public_rt" {
-  vpc_id = aws_vpc.postgresql_vpc.id
+  vpc_id = aws_vpc.vpc.id
 
   route {
     cidr_block = "0.0.0.0/0" # Any traffic destined for an address outside the VPC will be directed to the VPC internet gateway
@@ -101,12 +109,12 @@ resource "aws_route_table" "public_rt" {
   }
 
   tags = {
-    Name = "public_rt_postgresql_IaC"
+    Name = "${var.name}-public-rt"
   }
 }
 
-##### PUBLIC SUBNETS: ##### 
-# Associate the route table with the public_subnet: 
+##### PUBLIC SUBNETS: #####
+# Associate the route table with the public_subnet:
 resource "aws_route_table_association" "public_rt_assoc" {
   subnet_id      = aws_subnet.public_subnet_1.id
   route_table_id = aws_route_table.public_rt.id
@@ -114,9 +122,9 @@ resource "aws_route_table_association" "public_rt_assoc" {
 
 
 ############### PRIVATE ROUTING TABLE and SUBNETS: ###############
-# All traffic from the private subnets are going to the NAT Gateway: 
+# All traffic from the private subnets are going to the NAT Gateway:
 resource "aws_route_table" "private_rt" {
-  vpc_id = aws_vpc.postgresql_vpc.id
+  vpc_id = aws_vpc.vpc.id
 
   route {
     cidr_block     = "0.0.0.0/0"
@@ -124,18 +132,18 @@ resource "aws_route_table" "private_rt" {
   }
 
   tags = {
-    Name = "private_rt_postgresql_IaC"
+    Name = "${var.name}-private-rt"
   }
 }
 
-##### PRIVATE SUBNETS: ##### 
+##### PRIVATE SUBNETS: #####
 # Associate the route table with the 1st PRIVATE subnet:
 resource "aws_route_table_association" "private_rt_assoc" {
   subnet_id      = aws_subnet.private_subnet_1.id
   route_table_id = aws_route_table.private_rt.id
 }
 
-# Associate the route table with the 2nd PRIVATE subnet: 
+# Associate the route table with the 2nd PRIVATE subnet:
 resource "aws_route_table_association" "private_rt_assoc_2" {
   subnet_id      = aws_subnet.private_subnet_2.id
   route_table_id = aws_route_table.private_rt.id
