@@ -15,6 +15,12 @@ variable "admin_cidr" {
   }
 }
 
+variable "ssh_private_key_path" {
+  type        = string
+  default     = null
+  description = "Path to your private key, written into the generated ssh_config output. Leave unset to use ssh-agent / your default keys."
+}
+
 # Repo with this lab's scripts, cloned by the PostgreSQL server on boot:
 variable "repo_url" {
   type        = string

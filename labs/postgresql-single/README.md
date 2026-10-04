@@ -21,16 +21,39 @@ The servers finish installing about 5 minutes after `apply` completes. The insta
 
 ## Connect
 
-Add your key to the SSH agent (`ssh-add <path-to-key>`), then use the PMM server as a jump host:
+The PMM server is the SSH jump host (ProxyJump, `ssh -J`). It only relays the connection, so your private key never leaves your machine. Terraform generates the SSH config for you.
 
+**One-time setup**
+
+1. Set `ssh_private_key_path` in `terraform.tfvars`, or load the key into ssh-agent instead. Key setup on Windows: [modules/pmm_server/README.md](../../modules/pmm_server/README.md).
+2. Add this line at the top of `~/.ssh/config`:
+   ```
+   Include aws-postgresql-lab.conf
+   ```
+
+**After every deploy** (new IPs and host keys), write the config and reset the lab's known_hosts file. From `labs/postgresql-single/terraform`:
+
+Git Bash, Linux, macOS:
 ```bash
-ssh ec2-user@<pmm_server_public_ip>                                            # PMM / bastion
-ssh -J ec2-user@<pmm_server_public_ip> ec2-user@<postgresql_ec2_instance_internal_ip>  # PostgreSQL
+terraform output -raw ssh_config > ~/.ssh/aws-postgresql-lab.conf
+rm -f ~/.ssh/aws-postgresql-lab_known_hosts
 ```
 
-PMM UI: `https://<pmm_server_public_ip>`. The default login is `admin` / `admin`; change it on first login.
+PowerShell (plain `>` writes a BOM or UTF-16, which ssh can't parse):
+```powershell
+terraform output -raw ssh_config | Set-Content -Encoding ascii $HOME\.ssh\aws-postgresql-lab.conf
+Remove-Item $HOME\.ssh\aws-postgresql-lab_known_hosts -ErrorAction SilentlyContinue
+```
 
-Windows key setup notes: [modules/pmm_server/README.md](../../modules/pmm_server/README.md).
+Then connect:
+```bash
+ssh pmm-server          # PMM server / jump host
+ssh postgresql-source   # PostgreSQL, through the jump host
+```
+
+The same host names work with `scp` and VS Code Remote-SSH.
+
+PMM UI: `https://<pmm_server_public_ip>`. The default login is `admin` / `admin`; change it on first login.
 
 ## Register PostgreSQL in PMM
 

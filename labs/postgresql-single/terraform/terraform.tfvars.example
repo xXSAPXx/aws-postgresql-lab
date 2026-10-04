@@ -8,5 +8,8 @@ aws_key_pair               = "<EXAMPLE>"
 # Your public IP with /32 (get it with: curl -s https://checkip.amazonaws.com). Only this IP can reach SSH and the PMM UI.
 admin_cidr                 = "203.0.113.10/32"
 
+# Optional: private key for the generated SSH config (terraform output ssh_config). Use forward slashes on Windows.
+# ssh_private_key_path     = "C:/Users/<you>/.ssh/<key>"
+
 # Optional: clone the lab scripts from another branch (must be pushed to GitHub):
 # repo_branch              = "main"
