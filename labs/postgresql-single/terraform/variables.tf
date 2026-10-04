@@ -18,7 +18,7 @@ variable "admin_cidr" {
 # Repo with this lab's scripts, cloned by the PostgreSQL server on boot:
 variable "repo_url" {
   type        = string
-  default     = "https://github.com/xXSAPXx/PostgreSQL_Playground.git"
+  default     = "https://github.com/xXSAPXx/aws-postgresql-lab.git"
   description = "Git repo the PostgreSQL server clones on boot to copy the lab scripts to /opt"
 }
 
