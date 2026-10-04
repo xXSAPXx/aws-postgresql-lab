@@ -78,11 +78,11 @@ echo "postgres ALL=(ALL) NOPASSWD: ALL" | sudo tee /etc/sudoers.d/postgres
 # Create dir for the repo:
 sudo mkdir -p /tmp/repo
 
-# Download GitHub repo to /tmp directory 
-sudo git clone https://github.com/xXSAPXx/PostgreSQL_Playground.git /tmp/repo
+# Download GitHub repo to /tmp directory (repo + branch passed from Terraform):
+sudo git clone --branch "${repo_branch}" "${repo_url}" /tmp/repo
 
-# Copy all scripts to /opt/ directory
-sudo cp -r /tmp/repo/Scripts/* /opt/
+# Copy this lab's scripts to /opt/ directory
+sudo cp -r /tmp/repo/labs/postgresql-single/scripts/* /opt/
 
 # Set execute permissions for all scripts in /opt/ directory:
 sudo chmod +x /opt/*.sh

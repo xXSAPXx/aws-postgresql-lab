@@ -1,23 +1,21 @@
 #!/bin/bash
 
 ##################################################################
-# Hostname and /etc/hosts configuration: 
+# Hostname and /etc/hosts configuration:
 ##################################################################
 
 # Note: cloud-init already runs user_data as root.
 
-# Variables from Terraform / # Debug check: 
-POSTGRESQL_INTERNAL_IP="${postgresql_internal_ip}"
-echo "POSTGRESQL_INTERNAL_IP is: $POSTGRESQL_INTERNAL_IP" > /tmp/debug_env.txt
-
-# Set hostname: 
+# Set hostname:
 HOSTNAME="pmm-server"
 sudo hostnamectl set-hostname "$HOSTNAME"
 
-# Update /etc/hosts file: 
+# Update /etc/hosts file (extra_hosts entries are passed from Terraform):
 sudo bash -c "cat <<EOF > /etc/hosts
 127.0.0.1   localhost $HOSTNAME
-$POSTGRESQL_INTERNAL_IP   postgresql-source
+%{ for name, ip in extra_hosts ~}
+${ip}   ${name}
+%{ endfor ~}
 EOF"
 
 
@@ -32,10 +30,10 @@ sudo dnf -y install vim
 
 
 ##################################################################
-# User Data Script for PMM Installation: 
+# User Data Script for PMM Installation:
 ##################################################################
 
-# Install Docker and run PMM: 
+# Install Docker and run PMM:
 sudo curl -fsSL https://www.percona.com/get/pmm | /bin/bash
 
 # Enable Docker Service:

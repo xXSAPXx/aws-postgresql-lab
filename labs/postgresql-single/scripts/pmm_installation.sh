@@ -8,7 +8,7 @@ set -euo pipefail
 #
 #   PMM_DB_PASSWORD    - Password for the PostgreSQL 'pmm' monitoring user (required).
 #   PMM_ADMIN_PASSWORD - PMM UI admin password (optional, defaults to 'admin'). URL-encode special characters.
-#   PMM_SERVER_PRIVATE_IP - From the Terraform output: pmm_ec2_instance_private_ip
+#   PMM_SERVER_PRIVATE_IP - From the Terraform output: pmm_server_private_ip
 
 # Variables:
 PG_CONF="/var/lib/pgsql/17/data/postgresql.conf"

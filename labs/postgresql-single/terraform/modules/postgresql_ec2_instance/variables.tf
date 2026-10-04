@@ -5,7 +5,39 @@
 
 variable "vpc_cidr_block" {
   type        = string
-  description = "VPC CIDR allowed to connect to PostgreSQL with a password (pg_hba.conf)"
+  description = "VPC CIDR allowed to reach the instance (security group) and to connect to PostgreSQL with a password (pg_hba.conf)"
+}
+
+variable "repo_url" {
+  type        = string
+  description = "Git repo cloned on boot to copy this lab's scripts to /opt"
+}
+
+variable "repo_branch" {
+  type        = string
+  description = "Branch of repo_url to clone"
+}
+
+
+##########################################
+# POSTGRESQL SECURITY GROUP VARIABLES
+##########################################
+
+variable "vpc_id" {
+  type        = string
+  description = "The ID of the VPC where the security group will be created"
+}
+
+variable "sec_group_name" {
+  description = "Name for the PostgreSQL Instance Security Group"
+  type        = string
+  default     = "PostgreSQL_EC2_Instance_SG"
+}
+
+variable "sec_group_description" {
+  description = "Description for the PostgreSQL Instance Security Group"
+  type        = string
+  default     = "Allow SSH / PMM and PostgreSQL Ports"
 }
 
 
@@ -27,11 +59,6 @@ variable "instance_type" {
 variable "subnet_id" {
   description = "Subnet ID to launch the EC2 instance in"
   type        = string
-}
-
-variable "postgresql_sec_group_id" {
-  type        = string
-  description = "Sec_group id for the PostgreSQL EC2"
 }
 
 variable "key_name" {
