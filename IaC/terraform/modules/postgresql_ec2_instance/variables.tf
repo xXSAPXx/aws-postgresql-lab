@@ -3,7 +3,10 @@
 # TERRAFORM VARIABLES
 ##########################################
 
-
+variable "vpc_cidr_block" {
+  type        = string
+  description = "VPC CIDR allowed to connect to PostgreSQL with a password (pg_hba.conf)"
+}
 
 
 ##########################################

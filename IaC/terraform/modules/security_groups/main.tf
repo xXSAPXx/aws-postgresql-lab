@@ -25,7 +25,7 @@ resource "aws_security_group" "postgresql_ec2_instance_sg" {
     from_port   = -1
     to_port     = -1
     protocol    = "icmp"
-    cidr_blocks = [var.postgresql_ec2_instance_cidr_block, var.vpc_cidr_block] # Ping from outside and inside the VPC.
+    cidr_blocks = distinct([var.postgresql_ec2_instance_cidr_block, var.vpc_cidr_block]) # Ping from outside and inside the VPC.
   }
 
   egress {
@@ -64,14 +64,14 @@ resource "aws_security_group" "pmm_ec2_instance_sg" {
     from_port   = 443
     to_port     = 443
     protocol    = "tcp"
-    cidr_blocks = [var.pmm_ec2_instance_cidr_block]
+    cidr_blocks = distinct([var.pmm_ec2_instance_cidr_block, var.vpc_cidr_block]) # PMM UI from outside + PMM Clients inside the VPC.
   }
 
   ingress {
     from_port   = -1
     to_port     = -1
     protocol    = "icmp"
-    cidr_blocks = [var.pmm_ec2_instance_cidr_block, var.vpc_cidr_block] # Ping from outside and inside the VPC.
+    cidr_blocks = distinct([var.pmm_ec2_instance_cidr_block, var.vpc_cidr_block]) # Ping from outside and inside the VPC.
   }
 
   egress {

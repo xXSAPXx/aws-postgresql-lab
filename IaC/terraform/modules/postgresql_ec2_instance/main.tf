@@ -6,6 +6,7 @@
 
 locals {
   postgresql_ec2_userdata = templatefile("${path.module}/postgresql_ec2_instance_user_data.tpl", {
+    vpc_cidr_block = var.vpc_cidr_block
   })
 }
 

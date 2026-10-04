@@ -4,8 +4,7 @@
 # Hostname and /etc/hosts configuration: 
 ##################################################################
 
-# Switch to root user: 
-sudo su - root
+# Note: cloud-init already runs user_data as root.
 
 # Variables from Terraform / # Debug check: 
 POSTGRESQL_INTERNAL_IP="${postgresql_internal_ip}"

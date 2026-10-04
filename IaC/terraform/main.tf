@@ -40,17 +40,17 @@ module "vpc" {
 module "security_groups" {
   source = "./modules/security_groups"
 
-# For all SGs:
-  vpc_id = module.vpc.vpc_id
-  vpc_cidr_block              = module.vpc.vpc_cidr_block         # Used for ICMP (Ping) from inside the VPC.
+  # For all SGs:
+  vpc_id         = module.vpc.vpc_id
+  vpc_cidr_block = module.vpc.vpc_cidr_block # Used for ICMP (Ping) from inside the VPC.
 
   # --- PostgreSQL_EC2_Instance Sec_Group Settings ---
-  postgresql_ec2_instance_cidr_block = "0.0.0.0/0"
-  sec_group_name              = "PostgreSQL_EC2_Instance_SG"
-  sec_group_description       = "Allow SSH / PMM and PostgreSQL Ports"
+  postgresql_ec2_instance_cidr_block = module.vpc.vpc_cidr_block # Private DB: reachable only from inside the VPC.
+  sec_group_name                     = "PostgreSQL_EC2_Instance_SG"
+  sec_group_description              = "Allow SSH / PMM and PostgreSQL Ports"
 
   # --- PMM_EC2_Instance Sec_Group Settings ---
-  pmm_ec2_instance_cidr_block = "0.0.0.0/0"
+  pmm_ec2_instance_cidr_block = var.admin_cidr # Only your IP can reach SSH and the PMM UI.
   pmm_sec_group_name          = "PMM_EC2_Instance_SG"
   pmm_sec_group_description   = "Allow SSH / PMM Ports"
 
@@ -62,8 +62,11 @@ module "security_groups" {
 module "postgresql_ec2_instance" {
   source = "./modules/postgresql_ec2_instance"
 
-  # --- Pass Dynamic Variables to PMM EC2 Script ---
-  
+  # Wait for the whole VPC (NAT Gateway + routes) so the user_data script has internet access on boot:
+  depends_on = [module.vpc]
+
+  # --- Pass Dynamic Variables to PostgreSQL EC2 Script ---
+  vpc_cidr_block = module.vpc.vpc_cidr_block
 
   # --- PostgreSQL_EC2_Instance Settings ---
   ami_id                  = "ami-0583d8c7a9c35822c"
@@ -72,7 +75,7 @@ module "postgresql_ec2_instance" {
   subnet_id               = module.vpc.private_subnet_1_id
   postgresql_sec_group_id = module.security_groups.postgresql_ec2_instance_security_group_id
   #iam_instance_profile   = module.iam_roles............
-  postgresql_tag_name     = "postgresql-source"
+  postgresql_tag_name = "postgresql-source"
 
   # EBS Volume Settings:
   volume_size = 10
@@ -85,17 +88,20 @@ module "postgresql_ec2_instance" {
 module "pmm_ec2_instance" {
   source = "./modules/pmm_ec2_instance"
 
+  # Wait for the whole VPC (Internet Gateway + routes) so the user_data script has internet access on boot:
+  depends_on = [module.vpc]
+
   # --- Pass Dynamic Variables to PMM EC2 Script ---
   postgresql_internal_ip = module.postgresql_ec2_instance.postgresql_ec2_instance_internal_ip
 
   # --- PMM_EC2_Instance Settings ---
-  ami_id                        = "ami-0583d8c7a9c35822c"
-  instance_type                 = "t2.small"
-  key_name                      = var.aws_key_pair
-  subnet_id                     = module.vpc.public_subnet_1_id
-  pmm_sec_group_id              = module.security_groups.pmm_ec2_instance_security_group_id
+  ami_id           = "ami-0583d8c7a9c35822c"
+  instance_type    = "t2.small"
+  key_name         = var.aws_key_pair
+  subnet_id        = module.vpc.public_subnet_1_id
+  pmm_sec_group_id = module.security_groups.pmm_ec2_instance_security_group_id
   #iam_instance_profile         = module.iam_roles............
-  pmm_tag_name                  = "pmm-server"
+  pmm_tag_name = "pmm-server"
 
   # EBS Volume Settings:
   volume_size = 10
@@ -115,4 +121,9 @@ output "postgresql_ec2_instance_internal_ip" {
 
 output "pmm_ec2_instance_public_ip" {
   value = module.pmm_ec2_instance.pmm_ec2_instance_public_ip
+}
+
+# Pass this IP to /opt/pmm_installation.sh on the PostgreSQL server:
+output "pmm_ec2_instance_private_ip" {
+  value = module.pmm_ec2_instance.pmm_ec2_instance_private_ip
 }

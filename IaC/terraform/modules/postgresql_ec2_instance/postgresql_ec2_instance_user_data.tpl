@@ -5,10 +5,9 @@
 # Hostname and /etc/hosts configuration: 
 ##################################################################
 
-# Switch to root user: 
-sudo su - root
+# Note: cloud-init already runs user_data as root.
 
-# Set hostname: 
+# Set hostname:
 HOSTNAME="postgresql-source"
 sudo hostnamectl set-hostname "$HOSTNAME"
 
@@ -57,14 +56,15 @@ sudo dnf -y install percona-pg_repack17
 # Initialize PostgreSQL database
 /usr/pgsql-17/bin/postgresql-17-setup initdb
 
+# Set PostgreSQL to listen on all interfaces (before the first start, so no restart is needed):
+sudo sed -i "s/#listen_addresses = 'localhost'/listen_addresses = '*'/g" $PG_CONF
+
+# Allow remote connections from inside the VPC with password (scram-sha-256) auth by modifying pg_hba.conf:
+echo "host    all             all             ${vpc_cidr_block}             scram-sha-256" | sudo tee -a $PG_HBA
+
 # Enable and start PostgreSQL service
 sudo systemctl enable postgresql-17
 sudo systemctl start postgresql-17
-
-# Set PostgreSQL to listen on all interfaces
-sudo sed -i "s/#listen_addresses = 'localhost'/listen_addresses = '*'/g" $PG_CONF
-
-# Allow remote connections by modifying pg_hba.conf: 
 
 # Give postgres user sudo privileges: 
 echo "postgres ALL=(ALL) NOPASSWD: ALL" | sudo tee /etc/sudoers.d/postgres

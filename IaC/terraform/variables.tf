@@ -4,3 +4,13 @@ variable "aws_key_pair" {
   sensitive   = true
   description = "SSH KeyPair for the EC2 instances"
 }
+
+variable "admin_cidr" {
+  type        = string
+  description = "Your public IP in CIDR form (e.g. 203.0.113.10/32). Only this range can reach SSH and the PMM UI."
+
+  validation {
+    condition     = can(cidrhost(var.admin_cidr, 0))
+    error_message = "admin_cidr must be a valid CIDR block, e.g. 203.0.113.10/32."
+  }
+}
