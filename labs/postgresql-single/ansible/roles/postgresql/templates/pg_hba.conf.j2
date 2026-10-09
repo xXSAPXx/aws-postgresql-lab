@@ -1,0 +1,16 @@
+# Managed by Ansible (role: postgresql). Re-running the playbook overwrites manual changes.
+# TYPE  DATABASE        USER            ADDRESS                 METHOD
+
+# Unix socket: OS user = database user (e.g. sudo -u postgres psql).
+local   all             all                                     peer
+
+# Localhost TCP: passwords (pmm-agent connects here as the pmm user).
+host    all             all             127.0.0.1/32            scram-sha-256
+host    all             all             ::1/128                 scram-sha-256
+
+local   replication     all                                     peer
+host    replication     all             127.0.0.1/32            scram-sha-256
+host    replication     all             ::1/128                 scram-sha-256
+
+# Lab VPC (PMM server / jump host and the other lab servers): passwords.
+host    all             all             {{ postgresql_hba_vpc_cidr }}             scram-sha-256

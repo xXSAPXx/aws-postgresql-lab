@@ -1,16 +1,5 @@
 
 ##########################################
-# TERRAFORM VARIABLES
-##########################################
-
-variable "extra_hosts" {
-  type        = map(string)
-  default     = {}
-  description = "Extra /etc/hosts entries for the PMM Server as { hostname = private_ip }, e.g. the DB servers it monitors"
-}
-
-
-##########################################
 # PMM SECURITY GROUP VARIABLES
 ##########################################
 

@@ -1,16 +1,7 @@
 ###################################################################################
-# Generate a new base64 encoded userdata script for the PostgreSQL EC2.
-# With Added Dynamic Variables if needed.
-# This script must be passed to the PostgreSQL EC2 instance.
+# PostgreSQL EC2 instance + its security group.
+# The server is configured by Ansible (../ansible), not by user_data.
 ###################################################################################
-
-locals {
-  postgresql_ec2_userdata = templatefile("${path.module}/postgresql_ec2_instance_user_data.tpl", {
-    vpc_cidr_block = var.vpc_cidr_block
-    repo_url       = var.repo_url
-    repo_branch    = var.repo_branch
-  })
-}
 
 
 ########################################################################
@@ -63,7 +54,6 @@ resource "aws_instance" "postgresql_ec2_instance" {
   subnet_id              = var.subnet_id
   vpc_security_group_ids = [aws_security_group.postgresql_ec2_instance_sg.id]
   key_name               = var.key_name
-  user_data              = base64encode(local.postgresql_ec2_userdata)
   #iam_instance_profile  = var.iam_instance_profile
 
   root_block_device {

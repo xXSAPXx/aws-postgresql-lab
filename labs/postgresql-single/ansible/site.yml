@@ -1,0 +1,38 @@
+---
+# Lab: postgresql-single. Run from this directory after `terraform apply`:
+#   ansible-playbook site.yml
+# Re-running it puts every server back into the known-good state.
+
+- name: Wait for the servers (right after terraform apply they may still be booting)
+  hosts: all
+  gather_facts: false
+  tasks:
+    - name: Wait for SSH
+      ansible.builtin.wait_for_connection:
+        timeout: 300
+
+    # A new NAT gateway can take a minute or two before the private subnets reach the internet.
+    - name: Wait for internet access
+      ansible.builtin.wait_for:
+        host: dl.fedoraproject.org
+        port: 443
+        timeout: 300
+
+- name: Base setup for all lab servers
+  hosts: all
+  become: true
+  roles:
+    - common
+
+- name: PMM server
+  hosts: pmm_server
+  become: true
+  roles:
+    - pmm_server
+
+- name: PostgreSQL server
+  hosts: postgresql
+  become: true
+  roles:
+    - postgresql
+    - pmm_client

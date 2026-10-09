@@ -1,0 +1,11 @@
+# Managed by Ansible (role: postgresql). Re-running the playbook overwrites manual changes.
+# ALTER SYSTEM (postgresql.auto.conf) still overrides these settings.
+{% for name, value in postgresql_settings.items() %}
+{% if value is boolean %}
+{{ name }} = {{ value | ternary('on', 'off') }}
+{% elif value is number %}
+{{ name }} = {{ value }}
+{% else %}
+{{ name }} = '{{ value }}'
+{% endif %}
+{% endfor %}

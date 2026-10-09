@@ -2,7 +2,8 @@
 
 ####################################################################################################################################
 ######################################## LAB: postgresql-single ####################################################################
-# Single Percona PostgreSQL 17 server (private subnet) monitored by PMM 3 (public subnet, also the SSH bastion).
+# Single Percona PostgreSQL 17 server (private subnet) monitored by PMM 3 (public subnet, also the SSH jump host).
+# Terraform builds the infrastructure, Ansible (../ansible) configures the servers.
 # Shared modules live in ../../../modules, lab-specific modules in ./modules.
 
 
@@ -35,16 +36,9 @@ module "vpc" {
 module "postgresql_ec2_instance" {
   source = "./modules/postgresql_ec2_instance"
 
-  # Wait for the whole VPC (NAT Gateway + routes) so the user_data script has internet access on boot:
-  depends_on = [module.vpc]
-
-  # --- Pass Dynamic Variables to PostgreSQL EC2 Script ---
-  vpc_cidr_block = module.vpc.vpc_cidr_block
-  repo_url       = var.repo_url
-  repo_branch    = var.repo_branch
-
   # --- PostgreSQL_EC2_Instance Sec_Group Settings ---
   vpc_id                = module.vpc.vpc_id
+  vpc_cidr_block        = module.vpc.vpc_cidr_block
   sec_group_name        = "PostgreSQL_EC2_Instance_SG"
   sec_group_description = "Allow SSH / PMM and PostgreSQL Ports"
 
@@ -62,18 +56,10 @@ module "postgresql_ec2_instance" {
 }
 
 
-# Create the EC2: (PMM Server + Bastion Host)
+# Create the EC2: (PMM Server + SSH jump host)
 ######################################################################################
 module "pmm_server" {
   source = "../../../modules/pmm_server"
-
-  # Wait for the whole VPC (Internet Gateway + routes) so the user_data script has internet access on boot:
-  depends_on = [module.vpc]
-
-  # --- Pass Dynamic Variables to PMM EC2 Script (/etc/hosts entries) ---
-  extra_hosts = {
-    "postgresql-source" = module.postgresql_ec2_instance.postgresql_ec2_instance_internal_ip
-  }
 
   # --- PMM_EC2_Instance Sec_Group Settings ---
   vpc_id                = module.vpc.vpc_id

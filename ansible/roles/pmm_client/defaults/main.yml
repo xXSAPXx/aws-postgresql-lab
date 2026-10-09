@@ -1,0 +1,12 @@
+---
+# PMM server to register with: the first host of the pmm_server group, over the VPC.
+pmm_client_server_address: "{{ hostvars[groups['pmm_server'][0]]['private_ip'] }}"
+pmm_client_server_url: "https://admin:{{ pmm_admin_password }}@{{ pmm_client_server_address }}:443"
+
+# Services to monitor on this host, set by the lab (group_vars). Example:
+#   - type: postgresql
+#     name: pg1
+#     username: pmm
+#     password: "..."
+#     extra_args: --query-source=pgstatmonitor
+pmm_client_services: []

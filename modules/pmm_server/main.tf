@@ -1,14 +1,7 @@
 ###################################################################################
-# Generate a new base64 encoded userdata script for the PMM EC2.
-# With Added Dynamic Variables if needed.
-# This script must be passed to the PMM EC2 instance.
+# PMM Server EC2 instance + its security group.
+# PMM itself is installed by Ansible (ansible/roles/pmm_server), not by user_data.
 ###################################################################################
-
-locals {
-  pmm_server_userdata = templatefile("${path.module}/pmm_server_user_data.tpl", {
-    extra_hosts = var.extra_hosts
-  })
-}
 
 
 ########################################################################
@@ -20,7 +13,7 @@ resource "aws_security_group" "pmm_server_sg" {
   description = var.sec_group_description
   vpc_id      = var.vpc_id
 
-  # SSH (bastion) from your IP:
+  # SSH (jump host) from your IP:
   ingress {
     from_port   = 22
     to_port     = 22
@@ -60,7 +53,7 @@ resource "aws_security_group" "pmm_server_sg" {
 
 
 ########################################################################
-# Public EC2 - PMM + Bastion Host + DB Traffic Generator Server:
+# Public EC2 - PMM + SSH jump host + DB Traffic Generator Server:
 ########################################################################
 
 resource "aws_instance" "pmm_server" {
@@ -69,7 +62,6 @@ resource "aws_instance" "pmm_server" {
   subnet_id              = var.subnet_id
   vpc_security_group_ids = [aws_security_group.pmm_server_sg.id]
   key_name               = var.key_name
-  user_data              = base64encode(local.pmm_server_userdata)
 
   root_block_device {
     volume_size = var.volume_size

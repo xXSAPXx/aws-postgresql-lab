@@ -1,31 +1,16 @@
 
 ##########################################
-# TERRAFORM VARIABLES
-##########################################
-
-variable "vpc_cidr_block" {
-  type        = string
-  description = "VPC CIDR allowed to reach the instance (security group) and to connect to PostgreSQL with a password (pg_hba.conf)"
-}
-
-variable "repo_url" {
-  type        = string
-  description = "Git repo cloned on boot to copy this lab's scripts to /opt"
-}
-
-variable "repo_branch" {
-  type        = string
-  description = "Branch of repo_url to clone"
-}
-
-
-##########################################
 # POSTGRESQL SECURITY GROUP VARIABLES
 ##########################################
 
 variable "vpc_id" {
   type        = string
   description = "The ID of the VPC where the security group will be created"
+}
+
+variable "vpc_cidr_block" {
+  type        = string
+  description = "VPC CIDR allowed to reach the instance (SSH / PostgreSQL / ping)"
 }
 
 variable "sec_group_name" {
