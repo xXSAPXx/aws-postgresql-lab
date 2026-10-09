@@ -9,7 +9,7 @@
     name: percona-postgresql{{ postgresql_client_version }}
     state: present
 
-- name: Put the tools on PATH and set the connection defaults
+- name: Put the tools on PATH
   ansible.builtin.template:
     src: lab-postgresql.sh.j2
     dest: /etc/profile.d/lab-postgresql.sh
@@ -17,12 +17,13 @@
     group: root
     mode: "0644"
 
-- name: Store the password for the connection defaults (~/.pgpass)
-  ansible.builtin.copy:
-    content: "{{ postgresql_client_host }}:5432:*:{{ postgresql_client_user }}:{{ postgresql_client_password }}\n"
-    dest: "~{{ postgresql_client_os_user }}/.pgpass"
-    owner: "{{ postgresql_client_os_user }}"
-    group: "{{ postgresql_client_os_user }}"
+- name: Store the database passwords (~/.pgpass)
+  ansible.builtin.template:
+    src: pgpass.j2
+    dest: "~{{ item }}/.pgpass"
+    owner: "{{ item }}"
+    group: "{{ item }}"
     mode: "0600"
-  when: postgresql_client_password | length > 0
+  loop: "{{ postgresql_client_os_users }}"
+  when: postgresql_client_pgpass | length > 0
   no_log: true

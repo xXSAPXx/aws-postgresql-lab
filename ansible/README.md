@@ -43,7 +43,7 @@ A **role** is a folder of related steps, like one chapter of a runbook. Ansible 
 | `percona_release` | `ansible/roles/` | Installs `percona-release`, which manages the Percona repositories |
 | `pmm_server` | `ansible/roles/` | Docker, the PMM 3 container, the PMM admin password |
 | `pmm_client` | `ansible/roles/` | PMM client, registers the server with PMM, adds the databases to monitor |
-| `postgresql_client` | `ansible/roles/` | psql and pgbench on the load generator, with connection defaults for the lab database |
+| `postgresql_client` | `ansible/roles/` | psql and pgbench on the load generator, database passwords in `~/.pgpass` |
 | `postgresql` | `labs/postgresql-single/ansible/roles/` | Percona PostgreSQL 17, its configuration, pg_stat_monitor, the `pmm` monitoring user |
 
 Roles in `ansible/roles/` are shared by every lab, like the Terraform modules in `modules/`. A role that only one lab needs lives in that lab's own `ansible/roles/`.

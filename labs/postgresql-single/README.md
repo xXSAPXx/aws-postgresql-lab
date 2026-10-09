@@ -50,13 +50,13 @@ PMM UI: the `pmm_url` from `terraform output`. Log in as `admin` with the passwo
 
 ## Generate load
 
-The PMM server acts as the application: it sends load to PostgreSQL over the network, like an application server would. `psql` and `pgbench` on it connect to the `bench` database on `postgresql-source` without any arguments:
+The PMM server acts as the application: it sends load to PostgreSQL over the network, like an application server would. `psql` and `pgbench` are installed there, and the `bench` user's password is in `~/.pgpass` (for `rocky` and `root`) for every PostgreSQL server of the lab, so you only name the server:
 
 ```bash
 ssh pmm-server
-pgbench -i -s 20                 # create ~300 MB of test data (once)
-pgbench -c 8 -j 2 -T 300 -P 10   # 8 clients for 5 minutes, progress every 10 s
-psql                             # SQL shell as the bench user
+pgbench -h postgresql-source -U bench -i -s 20 bench               # create ~300 MB of test data (once)
+pgbench -h postgresql-source -U bench -c 8 -j 2 -T 300 -P 10 bench # 8 clients for 5 minutes, progress every 10 s
+psql -h postgresql-source -U bench bench                           # SQL shell as the bench user
 ```
 
 Watch the effect in PMM: **Dashboards → PostgreSQL → PostgreSQL Instance Summary**, and **Query Analytics**.
