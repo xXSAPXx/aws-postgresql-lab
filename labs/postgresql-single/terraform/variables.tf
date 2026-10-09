@@ -18,18 +18,5 @@ variable "admin_cidr" {
 variable "ssh_private_key_path" {
   type        = string
   default     = null
-  description = "Path to your private key, written into the generated ssh_config output. Leave unset to use ssh-agent / your default keys."
-}
-
-# Repo with this lab's scripts, cloned by the PostgreSQL server on boot:
-variable "repo_url" {
-  type        = string
-  default     = "https://github.com/xXSAPXx/aws-postgresql-lab.git"
-  description = "Git repo the PostgreSQL server clones on boot to copy the lab scripts to /opt"
-}
-
-variable "repo_branch" {
-  type        = string
-  default     = "main"
-  description = "Branch to clone. Set it to your pushed feature branch to test script changes before merging."
+  description = "Path to the key pair's private key, written into ~/.ssh/aws-postgresql-lab.conf. Leave unset to use ssh-agent / your default keys."
 }

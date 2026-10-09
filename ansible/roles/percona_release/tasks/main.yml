@@ -1,0 +1,7 @@
+---
+# percona-release manages the Percona repositories (PostgreSQL, PMM client, PXC, MongoDB...).
+- name: Install the percona-release repository tool
+  ansible.builtin.dnf:
+    name: https://repo.percona.com/yum/percona-release-latest.noarch.rpm
+    state: present
+    disable_gpg_check: true # bootstrap package: it installs the Percona signing keys itself

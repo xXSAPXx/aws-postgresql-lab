@@ -18,4 +18,13 @@ tfplan
 .terraform.lock.hcl
 
 
+##################### Ansible Ignore ######################
+
+# Inventory written by terraform apply
+inventory.ini
+
+# Lab passwords generated on the first playbook run
+credentials/
+
+
 

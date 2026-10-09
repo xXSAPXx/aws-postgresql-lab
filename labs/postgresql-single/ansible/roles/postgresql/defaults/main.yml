@@ -1,0 +1,31 @@
+---
+postgresql_version: 17
+postgresql_bin_dir: /usr/pgsql-{{ postgresql_version }}/bin
+postgresql_data_dir: /var/lib/pgsql/{{ postgresql_version }}/data
+postgresql_service: postgresql-{{ postgresql_version }}
+
+# Percona Distribution for PostgreSQL packages:
+postgresql_packages:
+  - percona-postgresql{{ postgresql_version }}-server
+  - percona-pgbackrest
+  - percona-pg_repack{{ postgresql_version }}
+  - percona-pg-stat-monitor{{ postgresql_version }}
+  - python3-psycopg2 # used by the community.postgresql modules
+
+# Written to conf.d/01-lab.conf (included at the end of postgresql.conf, so these win):
+postgresql_settings:
+  listen_addresses: "*"
+  shared_preload_libraries: pg_stat_monitor
+  pg_stat_monitor.pgsm_query_max_len: 2048
+  pg_stat_monitor.pgsm_normalized_query: true
+  pg_stat_monitor.pgsm_enable_query_plan: false # true adds query plans to PMM QAN, with some overhead
+
+# Password (scram-sha-256) logins from inside the VPC, in pg_hba.conf:
+postgresql_hba_vpc_cidr: "{{ vpc_cidr_block }}"
+
+# Monitoring user for PMM:
+postgresql_monitoring_user: pmm
+# postgresql_monitoring_password: set by the lab (group_vars), required.
+
+# Lab convenience: the postgres OS user may use sudo without a password.
+postgresql_os_user_sudo: true

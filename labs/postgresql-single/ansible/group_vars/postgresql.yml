@@ -1,0 +1,8 @@
+---
+# PMM monitors PostgreSQL through pg_stat_monitor (installed by the postgresql role).
+pmm_client_services:
+  - type: postgresql
+    name: "{{ inventory_hostname }}"
+    username: "{{ postgresql_monitoring_user }}"
+    password: "{{ postgresql_monitoring_password }}"
+    extra_args: --query-source=pgstatmonitor --auto-discovery-limit=10

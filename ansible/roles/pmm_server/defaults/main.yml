@@ -1,0 +1,6 @@
+---
+pmm_server_image: percona/pmm-server:3
+pmm_server_container_name: pmm-server
+pmm_server_volume: pmm-data
+
+# pmm_admin_password: set by the lab (group_vars), required.

@@ -4,9 +4,9 @@ Hands-on database labs on AWS that simulate a production environment. Each lab i
 
 ## How a lab works
 
-1. **Deploy:** `terraform apply` builds the network, the database servers and monitoring (PMM).
+1. **Deploy:** `terraform apply` builds the network and the servers, then `ansible-playbook site.yml` installs and configures the databases and monitoring (PMM).
 2. **Load:** generate test traffic so the database is under stress.
-3. **Break / fix:** kill nodes, fill disks, restore from backup, and watch it all in PMM.
+3. **Break / fix:** kill nodes, fill disks, restore from backup, and watch it all in PMM. Re-running the playbook resets the configuration to a known-good state.
 4. **Tear down:** `terraform destroy` removes everything.
 
 ## Labs
@@ -23,19 +23,34 @@ Hands-on database labs on AWS that simulate a production environment. Each lab i
 ```
 modules/              Shared Terraform modules, used by every lab
   vpc/                VPC, public + private subnets, NAT gateway, routing
-  pmm_server/         PMM 3 server, also the SSH bastion host
+  pmm_server/         PMM 3 server instance, also the SSH jump host
   iam_roles/          (placeholder)
   s3_for_backups/     (placeholder)
+ansible/roles/        Shared Ansible roles, used by every lab
+  common/             Hostname, /etc/hosts, EPEL, admin tools
+  percona_release/    Percona repository tool
+  pmm_server/         PMM 3 in Docker, admin password
+  pmm_client/         PMM client, registration, monitored services
 labs/<lab>/
   terraform/          The lab's Terraform root, with its own state file
-  scripts/            Scripts copied to /opt on the lab's servers
+  ansible/            The lab's playbook (site.yml) and lab-specific roles
 ```
 
 ## Before your first lab
 
+- A Linux or macOS shell. On Windows, use Ubuntu on WSL and run all lab commands there:
+  ```powershell
+  wsl --install -d Ubuntu
+  ```
+  Then, inside Ubuntu, turn on Linux file permissions for the Windows drive, so Ansible and ssh accept files under `/mnt/c`:
+  ```bash
+  printf '[automount]\noptions = "metadata,umask=22,fmask=11"\n' | sudo tee -a /etc/wsl.conf
+  ```
+  and restart Ubuntu from PowerShell: `wsl --terminate Ubuntu`.
 - An AWS account and the AWS CLI configured with credentials.
 - Terraform 1.10 or newer.
-- An EC2 key pair in `us-east-1`.
+- Ansible: `pipx install --include-deps ansible`.
+- An EC2 key pair in `us-east-1`, with its private key in `~/.ssh` ([key setup](modules/pmm_server/README.md#prepare-the-ssh-key)).
 - An S3 bucket for Terraform state (one-time setup):
   ```bash
   aws s3api create-bucket --bucket <your-bucket> --region us-east-1

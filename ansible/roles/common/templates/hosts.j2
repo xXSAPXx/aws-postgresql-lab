@@ -1,0 +1,8 @@
+# Managed by Ansible (role: common).
+127.0.0.1   localhost localhost.localdomain
+::1         localhost localhost.localdomain
+
+# Lab servers:
+{% for host in groups['all'] | sort %}
+{{ hostvars[host]['private_ip'] }}   {{ host }}
+{% endfor %}

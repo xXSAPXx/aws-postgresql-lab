@@ -1,0 +1,43 @@
+---
+- name: Enable the PMM 3 client repository
+  ansible.builtin.command: percona-release enable pmm3-client release
+  changed_when: false # enabling an already enabled repository is a no-op
+
+- name: Install the PMM client
+  ansible.builtin.dnf:
+    name: pmm-client
+    state: present
+
+- name: Check whether this node is registered with the PMM server
+  ansible.builtin.command: pmm-admin status
+  register: pmm_client_status
+  changed_when: false
+  failed_when: false
+
+# --force replaces a stale registration of the same node name on the server.
+- name: Register this node with the PMM server
+  ansible.builtin.command: >-
+    pmm-admin config --server-insecure-tls --force
+    --server-url={{ pmm_client_server_url | quote }}
+  when: pmm_client_status.rc != 0
+  changed_when: true
+  no_log: true
+
+- name: List the services this node already monitors
+  ansible.builtin.command: pmm-admin list
+  register: pmm_client_list
+  changed_when: false
+
+# A service is listed as: <type>  <name>  <address:port>  <service id>
+- name: Add the services to PMM
+  ansible.builtin.command: >-
+    pmm-admin add {{ item.type }}
+    --username={{ item.username | quote }}
+    --password={{ item.password | quote }}
+    --service-name={{ item.name | quote }}
+    {{ item.extra_args | default('') }}
+  loop: "{{ pmm_client_services }}"
+  when: >-
+    pmm_client_list.stdout is not search('(?m)^\\S+\\s+' ~ (item.name | regex_escape) ~ '\\s+\\S+:\\d+')
+  changed_when: true
+  no_log: true

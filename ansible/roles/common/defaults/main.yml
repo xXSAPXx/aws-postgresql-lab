@@ -1,0 +1,12 @@
+---
+# Admin tools installed on every lab server.
+common_packages:
+  - bash-completion
+  - bat
+  - bind-utils
+  - btop
+  - curl
+  - git
+  - iotop
+  - telnet
+  - vim

@@ -1,0 +1,78 @@
+---
+##################################################################
+# Docker:
+##################################################################
+
+- name: Add the Docker CE repository
+  ansible.builtin.get_url:
+    url: https://download.docker.com/linux/rhel/docker-ce.repo
+    dest: /etc/yum.repos.d/docker-ce.repo
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Install Docker
+  ansible.builtin.dnf:
+    name:
+      - docker-ce
+      - docker-ce-cli
+      - containerd.io
+    state: present
+
+- name: Start Docker
+  ansible.builtin.systemd_service:
+    name: docker
+    state: started
+    enabled: true
+
+
+##################################################################
+# PMM Server container:
+##################################################################
+
+- name: Check whether the PMM server container exists
+  ansible.builtin.command: docker inspect --type container {{ pmm_server_container_name }}
+  register: pmm_server_container
+  changed_when: false
+  failed_when: false
+
+- name: Start the PMM server container
+  ansible.builtin.command: >-
+    docker run --detach --restart always
+    --publish 443:8443
+    --volume {{ pmm_server_volume }}:/srv
+    --name {{ pmm_server_container_name }}
+    {{ pmm_server_image }}
+  when: pmm_server_container.rc != 0
+  changed_when: true
+
+- name: Wait for PMM to be ready
+  ansible.builtin.uri:
+    url: https://127.0.0.1/v1/server/readyz
+    validate_certs: false
+  register: pmm_server_ready
+  until: pmm_server_ready.status == 200
+  retries: 60
+  delay: 5
+
+
+##################################################################
+# Admin password (replaces the default admin / admin):
+##################################################################
+
+- name: Check whether the admin password is already set
+  ansible.builtin.uri:
+    url: https://127.0.0.1/graph/api/user
+    user: admin
+    password: "{{ pmm_admin_password }}"
+    force_basic_auth: true
+    validate_certs: false
+    status_code: [200, 401]
+  register: pmm_server_login
+  no_log: true
+
+- name: Set the admin password
+  ansible.builtin.command: docker exec {{ pmm_server_container_name }} change-admin-password {{ pmm_admin_password }}
+  when: pmm_server_login.status == 401
+  changed_when: true
+  no_log: true

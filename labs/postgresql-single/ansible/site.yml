@@ -1,0 +1,23 @@
+---
+# Lab: postgresql-single. Run from this directory after `terraform apply`:
+#   ansible-playbook site.yml
+# Re-running it puts every server back into the known-good state.
+
+- name: Base setup for all lab servers
+  hosts: all
+  become: true
+  roles:
+    - common
+
+- name: PMM server
+  hosts: pmm_server
+  become: true
+  roles:
+    - pmm_server
+
+- name: PostgreSQL server
+  hosts: postgresql
+  become: true
+  roles:
+    - postgresql
+    - pmm_client
