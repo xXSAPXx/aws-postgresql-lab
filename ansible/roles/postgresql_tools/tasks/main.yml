@@ -8,6 +8,20 @@
     name: "{{ postgresql_tools_packages }}"
     state: present
 
+# pg_top (EPEL) is built against the system libpq, but Percona's linker config puts /usr/pgsql-*/lib first,
+# so pg_top prints "libpq.so.5: no version information available" on every start. The wrapper loads the
+# system libpq for pg_top only; everything else keeps using Percona's.
+- name: Wrap pg_top to load the system libpq
+  ansible.builtin.copy:
+    content: |
+      #!/bin/sh
+      # Managed by Ansible (role: postgresql_tools). Runs pg_top with the system libpq it was built against.
+      LD_LIBRARY_PATH=/usr/lib64${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH} exec /usr/bin/pg_top "$@"
+    dest: /usr/local/bin/pg_top
+    owner: root
+    group: root
+    mode: "0755"
+
 - name: Install pg_activity in its own Python virtualenv
   ansible.builtin.pip:
     name: "{{ postgresql_tools_pg_activity_package }}"
@@ -21,12 +35,13 @@
     dest: /usr/local/bin/pg_activity
     state: link
 
-# sudo -i starts with sudo's secure_path, which has no /usr/local/bin on EL.
+# sudo -i starts with sudo's secure_path, which has no /usr/local/bin on EL. Put it first, as in a
+# normal login, so pg_activity and the pg_top wrapper are found.
 - name: Add /usr/local/bin to PATH in login shells that lack it
   ansible.builtin.copy:
     content: |
-      # Managed by Ansible (role: postgresql_tools). sudo -i starts without /usr/local/bin, where pg_activity is linked.
-      case ":$PATH:" in *:/usr/local/bin:*) ;; *) PATH="$PATH:/usr/local/bin" ;; esac
+      # Managed by Ansible (role: postgresql_tools). sudo -i starts without /usr/local/bin (pg_activity, pg_top wrapper).
+      case ":$PATH:" in *:/usr/local/bin:*) ;; *) PATH="/usr/local/bin:$PATH" ;; esac
     dest: /etc/profile.d/usr-local-bin.sh
     owner: root
     group: root
