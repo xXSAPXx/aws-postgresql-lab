@@ -26,7 +26,7 @@ modules/              Shared Terraform modules, used by every lab
   pmm_server/         PMM 3 server instance, also the SSH jump host
   iam_roles/          (placeholder)
   s3_for_backups/     (placeholder)
-ansible/roles/        Shared Ansible roles, used by every lab
+ansible/roles/        Shared Ansible roles, used by every lab (how it works: ansible/README.md)
   common/             Hostname, /etc/hosts, EPEL, admin tools
   percona_release/    Percona repository tool
   pmm_server/         PMM 3 in Docker, admin password

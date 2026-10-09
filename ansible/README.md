@@ -1,0 +1,114 @@
+# How the Ansible part works
+
+Terraform builds the servers. Ansible installs and configures everything on them. This page explains how the Ansible files fit together, using the [postgresql-single](../labs/postgresql-single/) lab as the example. You don't need to know Ansible to run a lab, only to change one.
+
+## The entry point: site.yml
+
+Each lab has one playbook, `labs/<lab>/ansible/site.yml`. It says which roles to apply to which servers, in order:
+
+```yaml
+- hosts: all                 # 1. every server
+  roles: [common]
+
+- hosts: pmm_server          # 2. the PMM server
+  roles: [pmm_server]
+
+- hosts: postgresql          # 3. the PostgreSQL server
+  roles: [postgresql, pmm_client]
+```
+
+A **role** is a folder of related steps, like one chapter of a runbook. Ansible connects to each server over SSH and runs the steps from top to bottom.
+
+## How Ansible finds the servers
+
+- **`inventory.ini`** is written by `terraform apply`. It lists the servers in groups, and `hosts:` in `site.yml` refers to these group names:
+  ```ini
+  [pmm_server]
+  pmm-server private_ip=10.0.0.5
+
+  [postgresql]
+  postgresql-source private_ip=10.0.0.37
+  ```
+  Ansible connects by those names. The SSH config that Terraform also writes (`~/.ssh/aws-postgresql-lab.conf`) supplies the IP, user, key and jump host.
+- **`ansible.cfg`** tells Ansible where the inventory and the roles are. That's why you run `ansible-playbook` from the lab's `ansible/` folder.
+
+## The roles
+
+| Role | Lives in | What it does |
+|---|---|---|
+| `common` | `ansible/roles/` | Hostname, `/etc/hosts` entries for every lab server, EPEL, admin tools |
+| `percona_release` | `ansible/roles/` | Installs `percona-release`, which manages the Percona repositories |
+| `pmm_server` | `ansible/roles/` | Docker, the PMM 3 container, the PMM admin password |
+| `pmm_client` | `ansible/roles/` | PMM client, registers the server with PMM, adds the databases to monitor |
+| `postgresql` | `labs/postgresql-single/ansible/roles/` | Percona PostgreSQL 17, its configuration, pg_stat_monitor, the `pmm` monitoring user |
+
+Roles in `ansible/roles/` are shared by every lab, like the Terraform modules in `modules/`. A role that only one lab needs lives in that lab's own `ansible/roles/`.
+
+## Inside a role
+
+Each folder in a role has one job. The `postgresql` role:
+
+```
+roles/postgresql/
+  tasks/main.yml        The steps. The only folder every role has.
+  defaults/main.yml     The settings: PostgreSQL version, packages, postgresql.conf values.
+  templates/            Config files with placeholders: pg_hba.conf.j2, 01-lab.conf.j2
+  handlers/main.yml     "Restart PostgreSQL" / "Reload PostgreSQL", run only when needed
+  meta/main.yml         Dependencies: run percona_release before this role
+```
+
+**Tasks** describe the state you want, not the command to run:
+
+```yaml
+- name: Install PostgreSQL, pgBackRest, pg_repack and pg_stat_monitor
+  ansible.builtin.dnf:
+    name: "{{ postgresql_packages }}"   # the list comes from defaults/main.yml
+    state: present                      # "make sure it's installed"
+```
+
+If the packages are already installed, the task does nothing and reports `ok`. Otherwise it installs them and reports `changed`.
+
+**Templates** are config files with blanks that Ansible fills in. In `pg_hba.conf.j2`, the line
+
+```
+host    all    all    {{ postgresql_hba_vpc_cidr }}    scram-sha-256
+```
+
+becomes `host all all 10.0.0.0/24 scram-sha-256` on the server.
+
+**Handlers** run only if the task that notifies them actually changed something:
+
+```yaml
+- name: Write the lab settings              # writes conf.d/01-lab.conf
+  ansible.builtin.template: ...
+  notify: Restart PostgreSQL                # restarts only if the file changed
+```
+
+Run the playbook again with nothing changed, and PostgreSQL is not restarted.
+
+## Where the values come from
+
+| File | What's in it | Applies to |
+|---|---|---|
+| `inventory.ini` (written by Terraform) | Private IPs, `vpc_cidr_block` | Each server / all servers |
+| `group_vars/all.yml` | Passwords, generated on the first run into `credentials/` | All servers |
+| `group_vars/postgresql.yml` | What PMM should monitor | Servers in the `[postgresql]` group |
+| `roles/<role>/defaults/main.yml` | The role's settings | Wherever the role runs |
+
+If the same variable is set in two places, `group_vars` wins over a role's defaults. For example, to turn on query plans in PMM, set `pg_stat_monitor.pgsm_enable_query_plan: true` in the `postgresql` role defaults (or override `postgresql_settings` in `group_vars/postgresql.yml`), then run the playbook again.
+
+## Running it again is safe
+
+Every task checks the current state first, so running `ansible-playbook site.yml` again changes only what differs from the expected configuration. That makes it the reset button for break/fix: it restores packages, configuration files, users, services and the PMM registration. It does not restore data you deleted.
+
+## Useful commands
+
+Run these from the lab's `ansible/` folder:
+
+```bash
+ansible-playbook site.yml --list-tasks          # every step, in order, without running anything
+ansible-playbook site.yml --check --diff        # dry run: show what would change
+ansible-playbook site.yml -l postgresql-source  # run on one server only
+```
+
+`--list-tasks` is the best place to start: it prints every step, grouped by play and role.

@@ -8,7 +8,7 @@ A single Percona PostgreSQL 17 server in a private subnet, monitored by PMM 3. U
 - **postgresql-source**: Percona PostgreSQL 17 with pg_stat_monitor, in private subnet 1. Reachable only from inside the VPC.
 - **pmm-server**: PMM 3 (Docker) in the public subnet, also the SSH jump host. SSH and the PMM UI accept connections only from your `admin_cidr`.
 
-Terraform (`terraform/`) builds the infrastructure. Ansible (`ansible/`) installs and configures everything on the servers.
+Terraform (`terraform/`) builds the infrastructure. Ansible (`ansible/`) installs and configures everything on the servers; [how the Ansible part works](../../ansible/README.md).
 
 ## Before your first deploy
 
