@@ -8,15 +8,18 @@
     validate_certs: false
   register: labapp_pmm_services
 
-# pmm-admin inside the PMM container; PMM then collects the probe's metrics itself.
-- name: Let PMM collect the probe metrics
+# pmm-admin inside the PMM container; PMM then collects the metrics itself.
+- name: Let PMM collect the labapp metrics
   ansible.builtin.command: >-
     docker exec {{ labapp_pmm_container }} pmm-admin add external-serverless
     --server-url=https://{{ labapp_pmm_user }}:{{ labapp_pmm_password }}@127.0.0.1:8443/
     --server-insecure-tls
-    --url=http://{{ labapp_metrics_host }}:{{ labapp_metrics_port }}/metrics
-    --external-name=labapp-probe
-  when: "'labapp-probe' not in (labapp_pmm_services.json | string)"
+    --url=http://{{ labapp_metrics_host }}:{{ item.port }}/metrics
+    --external-name={{ item.name }}
+  loop: "{{ labapp_pmm_exporters }}"
+  loop_control:
+    label: "{{ item.name }}"
+  when: "item.name not in (labapp_pmm_services.json | string)"
   changed_when: true
   no_log: true
 
@@ -36,17 +39,21 @@
   register: labapp_folder
   changed_when: labapp_folder.status == 200
 
-- name: Read the dashboard currently in PMM
+- name: Read the dashboards currently in PMM
   ansible.builtin.uri:
-    url: "{{ labapp_pmm_url }}/graph/api/dashboards/uid/labapp-probe"
+    url: "{{ labapp_pmm_url }}/graph/api/dashboards/uid/{{ item.uid }}"
     user: "{{ labapp_pmm_user }}"
     password: "{{ labapp_pmm_password }}"
     force_basic_auth: true
     validate_certs: false
     status_code: [200, 404]
-  register: labapp_current_dashboard
+  register: labapp_current_dashboards
+  loop: "{{ labapp_dashboards }}"
+  loop_control:
+    label: "{{ item.uid }}"
 
-- name: Upload the dashboard
+# The description holds the revision of the repo file: a different revision means the repo version changed.
+- name: Upload the dashboards that changed in the repo
   ansible.builtin.uri:
     url: "{{ labapp_pmm_url }}/graph/api/dashboards/db"
     method: POST
@@ -56,11 +63,18 @@
     validate_certs: false
     body_format: json
     body:
-      dashboard: "{{ lookup('ansible.builtin.file', 'labapp-dashboard.json') | from_json | combine({'description': labapp_dashboard_description}) }}"
+      dashboard: "{{ lookup('ansible.builtin.file', item.item.file) | from_json | combine({'description': labapp_description}) }}"
       folderUid: "{{ labapp_dashboard_folder_uid }}"
       overwrite: true
       message: Uploaded by Ansible (role labapp)
+  vars:
+    labapp_description: >-
+      Managed by Ansible (role labapp, revision {{ (lookup('ansible.builtin.file', item.item.file) | hash('sha1'))[:12] }}).
+      Edit ansible/roles/labapp/files/{{ item.item.file }} in the repo: re-running the playbook replaces changes made here.
+  loop: "{{ labapp_current_dashboards.results }}"
+  loop_control:
+    label: "{{ item.item.uid }}"
   when: >-
-    labapp_current_dashboard.status == 404
-    or labapp_current_dashboard.json.dashboard.description | default('') != labapp_dashboard_description
+    item.status == 404
+    or item.json.dashboard.description | default('') != labapp_description
   changed_when: true

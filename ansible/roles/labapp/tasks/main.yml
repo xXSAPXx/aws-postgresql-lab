@@ -1,6 +1,6 @@
 ---
 ##################################################################
-# Install labapp and run the probe as a service:
+# Install labapp:
 ##################################################################
 
 - name: Create the labapp system user
@@ -28,16 +28,17 @@
     virtualenv: "{{ labapp_dir }}/venv"
     virtualenv_command: python3 -m venv
     state: present
-  notify: Restart the labapp probe
+  notify: [Restart the labapp probe, Restart the labapp workload]
 
 - name: Install labapp
   ansible.builtin.copy:
-    src: "{{ labapp_source }}"
-    dest: "{{ labapp_dir }}/labapp.py"
+    src: "{{ labapp_source_dir }}/{{ item }}"
+    dest: "{{ labapp_dir }}/{{ item }}"
     owner: root
     group: root
     mode: "0755"
-  notify: Restart the labapp probe
+  loop: "{{ labapp_files }}"
+  notify: [Restart the labapp probe, Restart the labapp workload]
 
 - name: Put labapp on PATH
   ansible.builtin.copy:
@@ -49,6 +50,11 @@
     owner: root
     group: root
     mode: "0755"
+
+
+##################################################################
+# Probe (labapp-probe):
+##################################################################
 
 - name: Write the probe configuration
   ansible.builtin.template:
@@ -76,21 +82,58 @@
     enabled: true
     daemon_reload: true
 
-- name: Apply a changed probe before registering it
+
+##################################################################
+# Workload (labapp-workload):
+##################################################################
+
+- name: Write the workload configuration
+  ansible.builtin.template:
+    src: workload.json.j2
+    dest: /etc/labapp/workload.json
+    owner: root
+    group: "{{ labapp_user }}"
+    mode: "0640"
+  notify: Restart the labapp workload
+  no_log: true # contains passwords
+  when: labapp_workload_enabled
+
+- name: Install the workload service
+  ansible.builtin.template:
+    src: labapp-workload.service.j2
+    dest: /etc/systemd/system/labapp-workload.service
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart the labapp workload
+  when: labapp_workload_enabled
+
+- name: Start the workload
+  ansible.builtin.systemd_service:
+    name: labapp-workload
+    state: started
+    enabled: true
+    daemon_reload: true
+  when: labapp_workload_enabled
+
+- name: Apply changes before registering with PMM
   ansible.builtin.meta: flush_handlers
 
-- name: Wait for the probe's metrics
+- name: Wait for the metrics
   ansible.builtin.uri:
-    url: http://127.0.0.1:{{ labapp_metrics_port }}/metrics
+    url: http://127.0.0.1:{{ item.port }}/metrics
   register: labapp_metrics
   until: labapp_metrics.status == 200
-  retries: 15
+  retries: 30
   delay: 2
+  loop: "{{ labapp_pmm_exporters }}"
+  loop_control:
+    label: "{{ item.name }}"
 
 
 ##################################################################
-# PMM: collect the metrics, upload the dashboard:
+# PMM: collect the metrics, upload the dashboards:
 ##################################################################
 
-- name: Register with PMM and upload the dashboard
+- name: Register with PMM and upload the dashboards
   ansible.builtin.import_tasks: pmm.yml

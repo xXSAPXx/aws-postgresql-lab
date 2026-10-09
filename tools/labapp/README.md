@@ -1,8 +1,13 @@
 # labapp: the lab's simulated application
 
-`labapp` plays the application in every lab. It runs on the PMM server, connects to the databases over the network like an application server, and measures what the application experiences while you do DBA work: restarts, failovers, maintenance, broken configurations.
+`labapp` plays the application in every lab. It runs on the PMM server, connects to the databases over the network like an application server, and measures what the application experiences while you do DBA work: restarts, failovers, migrations, maintenance, broken configurations.
 
-It is installed and started by the Ansible role [`labapp`](../../ansible/roles/labapp/). Today it has one part, the **probe**; a realistic **workload** (orders, reports, varying traffic) is planned next.
+It is installed and started by the Ansible role [`labapp`](../../ansible/roles/labapp/), as two services:
+
+- **`labapp-probe`** checks every database continuously and measures downtime and latency.
+- **`labapp-workload`** is the shop's traffic: users browsing and buying, long-running reports and batch jobs, against the [shop database](../../schema/shop/README.md).
+
+Both report to one PMM dashboard, **Lab → Lab: Application**.
 
 ## The probe
 
@@ -19,19 +24,103 @@ For each outage, the probe:
 
 - writes a line to `/var/log/labapp/outages.jsonl`;
 - logs its start and end to the journal (`journalctl -u labapp-probe`);
-- adds an annotation (a red time range) in PMM, on the **Lab: Application probe** dashboard and on PMM's own dashboards of that service.
+- adds an annotation (a red time range) in PMM, on the **Lab: Application** dashboard and on PMM's own dashboards of that service.
+
+The probe's own table, `labapp_probe` in the `labapp` database, holds one heartbeat row per probe and target.
+
+## The workload
+
+The `labapp-workload` service plays the shop's users, reporting tools and batch jobs. It is **open loop**, like real users: requests arrive at the target rate whether or not the database keeps up. 24 workers, one connection each as `shop_app`, run them as business transactions. When the database slows down, requests queue for a free worker, and the response time includes that wait. A request that waited 30 s counts as `expired` (the user gave up); once 5,000 requests are waiting, new ones are `dropped`.
+
+**Target rate** = base rate (30 requests/s) × an hourly wave (±40%, a "day" every hour) × a flash sale (3× for 3 minutes, every 30 minutes).
+
+### Transactions
+
+| Transaction | Share | What it does |
+|---|---|---|
+| `product_page` | 33% | A product with its category and brand, attributes, last 5 reviews and stock |
+| `cart` | 15% | Adds a product to the customer's open cart, or to a new one (20% are guests) |
+| `category` | 14% | A page of a category's products, sorted by price |
+| `login` | 10% | Finds the customer by email, updates `last_seen_at`, writes `audit_log` |
+| `checkout` | 8% | Takes 1–3 products off the stock, then inserts the order, its lines, stock movements, payment and status history, closes the cart and writes `audit_log`, in one transaction. No stock left: rolled back as `out_of_stock` (a business outcome, not an error) |
+| `payment` | 8% | Takes the oldest pending payment (`FOR UPDATE SKIP LOCKED`): captured, so the order is paid and invoiced, or 3% declined, so the order is cancelled |
+| `order_history` | 6% | The customer's last 10 orders |
+| `shipping` | 5% | Ships the oldest paid order, or delivers the oldest shipment in transit |
+| `signup` | 1% | A new customer with an address |
+
+Traffic is skewed like the generated data: a few products and customers get most of it. During a flash sale, 70% of the products picked are the 20 hot ones, so their `inventory` rows become hot rows.
+
+`checkout` locks the stock rows in the order the customer added the products, not sorted, like many real applications: two checkouts of the same products can deadlock. Deadlocks and serialization failures are retried once.
+
+Each finished request is counted with one result:
+
+| Result | Meaning |
+|---|---|
+| `ok` | Done |
+| `out_of_stock` | Checkout rolled back for lack of stock (not an error) |
+| `lock_timeout` | Waited longer than `lock_timeout` for a lock (2 s for `shop_app`) |
+| `canceled` | `statement_timeout` (5 s for `shop_app`), or `pg_cancel_backend()` |
+| `deadlock`, `serialization` | Failed again after the one retry |
+| `idle_in_tx_timeout` | The session was idle in a transaction for too long |
+| `connection` | Server down or restarting, or the session was killed (`pg_terminate_backend()`) |
+| `other` | Any other database error |
+| `expired` | Waited 30 s for a free worker |
+| `dropped` | The queue was full |
+
+### Long-running reports and batch jobs
+
+Each job has its own connection and role, and runs on its own schedule. A job never runs twice at once: if the previous run is still going, the next one is skipped.
+
+| Job | Role | Default | What it does | What it does to the database |
+|---|---|---|---|---|
+| `sales_dashboard` | `shop_reporting` | every 2 min, ~30 s | Revenue per day and category over 90 days, ranked | One long statement |
+| `lifetime_value_export` | `shop_analytics` | every 5 min, ~1 min | Every customer's lifetime value, read through a cursor in batches of 5,000 with pauses in between (a slow client) | A transaction open for the whole export |
+| `bi_extract` | `shop_analytics` | every 15 min, ~5 min | Five reports in one `REPEATABLE READ` transaction | One snapshot held for 5 minutes, which holds back vacuum on every table |
+| `cart_cleanup` | `shop_batch` | every 10 min | Marks carts idle for 30 minutes as abandoned, deletes old ones | Bulk `UPDATE` and `DELETE`: dead rows, bloat |
+| `restock` | `shop_batch` | every 15 min | Adds 500 to every stock row below 50, with ledger rows | A bulk `UPDATE` of `inventory` |
+| `stock_recount` | `shop_batch` | every 20 min, ~90 s | Locks every stock row and recounts it against the ledger, in one transaction | All of `inventory` locked for 90 s: checkouts fail with `lock_timeout` |
+
+When the data is too small for a report to take its target time, the query is padded with `pg_sleep` inside the same statement or transaction, so the snapshot and the locks are held for the whole time, as with a real slow query. The padding adapts to the measured query time.
+
+`stock_recount` runs the bad way by default (`mode: single_transaction`). `mode: batched` recounts in small transactions of 1,000 products, holding each lock only briefly.
+
+### Schedule
+
+The cycles fit a 1–2 hour lab. Minutes after the service starts (it starts at the end of the playbook; a restart starts the schedule again):
+
+| | First run | Then every |
+|---|---|---|
+| `sales_dashboard` | 1 | 2 min |
+| `lifetime_value_export` | 2.5 | 5 min |
+| `cart_cleanup` | 5 | 10 min |
+| `bi_extract` | 7 | 15 min |
+| `restock` | 7.5 | 15 min |
+| `stock_recount` | 10 | 20 min |
+| Flash sale (3 min) | 20 | 30 min |
+
+The flash sales, `bi_extract`, `cart_cleanup` and `stock_recount` are marked in purple on the dashboard.
 
 ## Commands
 
 On the PMM server:
 
 ```bash
-labapp outages              # the measured outages: start, end, duration, first error
+labapp outages                  # the measured outages: start, end, duration, first error
 labapp outages --last 5
 journalctl -u labapp-probe -f
+
+labapp load status              # rates, mode, queued requests, running jobs
+labapp load rate 60             # base rate: 60 requests per second
+labapp load pause               # stop sending requests (reports and batch jobs keep their schedule)
+labapp load resume
+labapp load flash-sale 300      # a 5-minute flash sale, now
+labapp load run stock_recount   # run a report or batch job now
+journalctl -u labapp-workload -f
 ```
 
-Example after `systemctl restart postgresql-17` and a 10-second stop:
+`labapp load` changes last until the workload restarts, which goes back to the configured rate.
+
+Example of `labapp outages` after `systemctl restart postgresql-17` and a 10-second stop:
 
 ```
   #  target               start (UTC)              end (UTC)                 duration  first error
@@ -41,9 +130,36 @@ Example after `systemctl restart postgresql-17` and a 10-second stop:
 2 outages, 11.795 s of write downtime in total.
 ```
 
+## The dashboard
+
+**Lab → Lab: Application** in PMM, in four rows:
+
+| Row | Shows |
+|---|---|
+| **Overview** | Database writes UP / DOWN, the ongoing outage, target rate, completed transactions per second, shop errors, mode (normal / flash sale / paused) |
+| **Availability (probe)** | Outages and downtime in the selected time range, the last outage, write latency, the UP / DOWN timeline, write and connect latency, checks per second |
+| **Shop workload** | Checkout p95, queued requests, transactions per second by type against the target rate, response time by type, errors by kind and by transaction |
+| **Reports and batch jobs** | When each report and batch job ran, and how long the last run took |
+
+Outages (red) and workload events (purple) are marked on every chart.
+
+## Configuration
+
+The role's defaults (`ansible/roles/labapp/defaults/main.yml`), overridable in the lab's `group_vars`:
+
+| Variable | Default | |
+|---|---|---|
+| `labapp_workload_enabled` | `true` | `false` runs only the probe |
+| `labapp_workload_rate` | `30` | Base requests per second |
+| `labapp_workload_workers` | `24` | Connections as `shop_app` |
+| `labapp_workload_mix` | the shares above | Transaction weights, e.g. `{product_page: 50, checkout: 20, ...}` |
+| `labapp_workload_wave` | `{period: 3600, amplitude: 0.4}` | The traffic cycle |
+| `labapp_workload_flash_sale` | every 30 min, first at 20, 3 min, 3× | |
+| `labapp_workload_jobs` | the schedule above | `every`, `first` and `target` in seconds; `stock_recount` also takes `mode` |
+
 ## Metrics
 
-Served on port 9300 (`/metrics`) and collected by PMM as the external service `labapp-probe`:
+The probe serves port 9300 and the workload port 9302 (`/metrics`), collected by PMM as the external services `labapp-probe` and `labapp-workload`.
 
 | Metric | Meaning |
 |---|---|
@@ -54,5 +170,11 @@ Served on port 9300 (`/metrics`) and collected by PMM as the external service `l
 | `labapp_probe_downtime_seconds_total{target}` | Total write downtime |
 | `labapp_probe_current_outage_seconds{target}` | Duration of the ongoing outage, 0 when up |
 | `labapp_probe_last_outage_seconds{target}` | Duration of the last completed outage |
-
-The probe's own table, `labapp_probe` in the `labapp` database, holds one heartbeat row per probe and target.
+| `labapp_tx_total{tx, result}` | Shop transactions by type and result |
+| `labapp_tx_latency_seconds{tx}` | Histogram of the response time: queue wait + transaction |
+| `labapp_tx_queue_depth` | Requests waiting for a free worker |
+| `labapp_load_base_rate`, `labapp_load_target_rate` | Base and current target rate, requests per second |
+| `labapp_load_flash_sale`, `labapp_load_paused` | 1 during a flash sale, 1 while paused |
+| `labapp_job_active{job}` | 1 while a report or batch job runs |
+| `labapp_job_runs_total{job, result}` | Job runs, `result` = ok / error |
+| `labapp_job_last_duration_seconds{job}` | Duration of the last run |

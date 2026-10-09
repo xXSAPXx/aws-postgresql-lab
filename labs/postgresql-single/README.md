@@ -6,7 +6,7 @@ A single Percona PostgreSQL 17 server in a private subnet, monitored by PMM 3. U
 
 - **VPC** `10.0.0.0/24`: one public subnet, two private subnets in two availability zones, and a NAT gateway.
 - **postgresql-source**: Percona PostgreSQL 17 with pg_stat_monitor and data checksums, in private subnet 1. Its data lives on a separate encrypted gp3 volume (20 GB by default, mounted at `/var/lib/pgsql`). The configuration is sized from the server's RAM and CPUs (`conf.d/01-lab.conf`, every setting commented), and `pg_hba.conf` lets each user reach only its own database, only from the PMM server.
-- **pmm-server**: PMM 3 (Docker) in the public subnet, also the SSH jump host and the application side: the labapp probe and the load tools (psql, pgbench). SSH and the PMM UI accept connections only from your `admin_cidr`.
+- **pmm-server**: PMM 3 (Docker) in the public subnet, also the SSH jump host and the application side: the labapp probe and shop workload, and the load tools (psql, pgbench). SSH and the PMM UI accept connections only from your `admin_cidr`.
 
 Both servers run Rocky Linux 10 (the newest official image at deploy time): PostgreSQL on a t3.small, the PMM server on a t3.medium because it also generates the load. Change them with `postgresql_instance_type` and `pmm_instance_type` in `terraform.tfvars`; Rocky Linux 10 needs a current type such as t3 or m7i, not t2. For load tests, use a non-burstable type for PostgreSQL such as `m7i.large`: t3 instances are throttled once their CPU credits run out, which looks like a slow database in PMM.
 
@@ -39,7 +39,7 @@ cd ../ansible
 ansible-playbook site.yml    # about 10 minutes on the first run
 ```
 
-`terraform apply` also writes the SSH config (`~/.ssh/aws-postgresql-lab.conf`) and the Ansible inventory (`ansible/inventory.ini`) with the new IPs. The playbook installs PostgreSQL and PMM, generates the lab passwords into `ansible/credentials/`, registers PostgreSQL in PMM, and builds the shop database with Liquibase (the first run also generates its data, about 4 minutes).
+`terraform apply` also writes the SSH config (`~/.ssh/aws-postgresql-lab.conf`) and the Ansible inventory (`ansible/inventory.ini`) with the new IPs. The playbook installs PostgreSQL and PMM, generates the lab passwords into `ansible/credentials/`, registers PostgreSQL in PMM, builds the shop database with Liquibase (the first run also generates its data, about 4 minutes), and starts the application: the labapp probe and the shop workload.
 
 ## Connect
 
@@ -77,7 +77,25 @@ psql -h postgresql-source -U shop_app shop         # the application: DML only, 
 psql -h postgresql-source -U shop_reporting shop   # reports: read-only
 ```
 
-## Generate load
+## The shop workload
+
+From the end of the playbook, the [labapp workload](../../tools/labapp/README.md#the-workload) on the PMM server runs the shop's traffic against the `shop` database, like a production application: about 30 requests per second of browsing, carts, checkouts, payments and shipping, rising and falling in an hourly cycle, with a flash sale every 30 minutes. Long-running reports (30 s, 1 min and 5 min) and batch jobs (cart cleanup, restock, a stock recount that locks every stock row for 90 s) run on schedules that fit a 1–2 hour lab.
+
+Watch it on the **Lab → Lab: Application** dashboard in PMM: throughput against the target rate, response times, errors by kind (lock timeouts, cancels, deadlocks, connection errors), and when each report and batch job ran. Control it from the PMM server:
+
+```bash
+ssh pmm-server
+labapp load status              # rates, mode, queued requests, running jobs
+labapp load rate 60             # more traffic
+labapp load flash-sale 300      # a 5-minute flash sale, now
+labapp load run stock_recount   # a batch job, now
+labapp load pause               # quiet, e.g. to look at one query in isolation
+labapp load resume
+```
+
+Every change you make to the shop database, from a migration to a restart or a killed session, shows up there as the application sees it.
+
+## More load: pgbench
 
 The PMM server acts as the application: it sends load to PostgreSQL over the network, like an application server would. `psql` and `pgbench` are installed there, and the `bench` user's password is in `~/.pgpass` (for `rocky` and `root`) for every PostgreSQL server of the lab, so you only name the server:
 
@@ -105,7 +123,7 @@ sudo -iu postgres pg_top         # drill down into one PID
 
 While the lab runs, the [labapp probe](../../tools/labapp/README.md) on the PMM server writes to PostgreSQL four times a second, like an application would. Whatever you do to the database, it measures what the application experiences: every outage with its exact start, end and duration, and the write and connect latency.
 
-- **In PMM:** the **Lab → Lab: Application probe** dashboard shows UP / DOWN, the ongoing outage, outages and downtime in the selected time range, and latency. Outages are also marked in red on PMM's PostgreSQL dashboards.
+- **In PMM:** the **Lab → Lab: Application** dashboard shows UP / DOWN, the ongoing outage, outages and downtime in the selected time range, and latency, next to the shop workload. Outages are also marked in red on PMM's PostgreSQL dashboards.
 - **On the PMM server:** `labapp outages` lists every outage measured:
   ```bash
   ssh pmm-server

@@ -1,13 +1,13 @@
 {
   "id": null,
-  "uid": "labapp-probe",
-  "title": "Lab: Application probe",
+  "uid": "labapp",
+  "title": "Lab: Application",
   "tags": ["lab", "labapp"],
   "timezone": "browser",
   "editable": true,
   "graphTooltip": 1,
   "refresh": "5s",
-  "time": { "from": "now-30m", "to": "now" },
+  "time": { "from": "now-1h", "to": "now" },
   "schemaVersion": 39,
   "annotations": {
     "list": [
@@ -26,6 +26,13 @@
         "iconColor": "red",
         "name": "Outages",
         "target": { "type": "tags", "tags": ["labapp", "outage"], "matchAny": false, "limit": 100 }
+      },
+      {
+        "datasource": { "type": "grafana", "uid": "-- Grafana --" },
+        "enable": true,
+        "iconColor": "purple",
+        "name": "Flash sales and batch jobs",
+        "target": { "type": "tags", "tags": ["labapp", "workload"], "matchAny": false, "limit": 100 }
       }
     ]
   },
@@ -45,7 +52,7 @@
       },
       {
         "name": "target",
-        "label": "Target",
+        "label": "Probe target",
         "type": "query",
         "datasource": { "type": "prometheus", "uid": "${datasource}" },
         "definition": "label_values(labapp_probe_up, target)",
@@ -60,300 +67,318 @@
     ]
   },
   "panels": [
+    { "id": 100, "type": "row", "title": "Overview", "collapsed": false, "gridPos": { "x": 0, "y": 0, "w": 24, "h": 1 }, "panels": [] },
     {
       "id": 1,
       "type": "stat",
-      "title": "Writes",
-      "description": "Result of the last write check: a heartbeat row written to the database several times a second.",
-      "gridPos": { "x": 0, "y": 0, "w": 4, "h": 4 },
+      "title": "Database writes",
+      "description": "Probe: result of the last write check, a heartbeat row written to the database four times a second.",
+      "gridPos": { "x": 0, "y": 1, "w": 4, "h": 4 },
       "datasource": { "type": "prometheus", "uid": "${datasource}" },
-      "targets": [
-        { "refId": "A", "expr": "min(labapp_probe_up{check=\"write\", target=~\"$target\"})", "instant": true }
-      ],
+      "targets": [{ "refId": "A", "expr": "min(labapp_probe_up{check=\"write\", target=~\"$target\"})", "instant": true }],
       "fieldConfig": {
         "defaults": {
-          "mappings": [
-            {
-              "type": "value",
-              "options": {
-                "0": { "text": "DOWN", "color": "red", "index": 0 },
-                "1": { "text": "UP", "color": "green", "index": 1 }
-              }
-            }
-          ],
+          "mappings": [ { "type": "value", "options": { "0": { "text": "DOWN", "color": "red", "index": 0 }, "1": { "text": "UP", "color": "green", "index": 1 } } } ],
           "color": { "mode": "thresholds" },
           "thresholds": { "mode": "absolute", "steps": [ { "color": "red", "value": null }, { "color": "green", "value": 1 } ] }
         },
         "overrides": []
       },
-      "options": {
-        "colorMode": "background",
-        "graphMode": "none",
-        "justifyMode": "center",
-        "textMode": "value",
-        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }
-      }
+      "options": { "colorMode": "background", "graphMode": "none", "justifyMode": "center", "textMode": "value", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false } }
     },
     {
       "id": 2,
       "type": "stat",
       "title": "Current outage",
       "description": "How long the ongoing write outage has lasted. 0 when the database accepts writes.",
-      "gridPos": { "x": 4, "y": 0, "w": 4, "h": 4 },
+      "gridPos": { "x": 4, "y": 1, "w": 4, "h": 4 },
       "datasource": { "type": "prometheus", "uid": "${datasource}" },
-      "targets": [
-        { "refId": "A", "expr": "max(labapp_probe_current_outage_seconds{target=~\"$target\"})", "instant": true }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "s",
-          "decimals": 1,
-          "color": { "mode": "thresholds" },
-          "thresholds": { "mode": "absolute", "steps": [ { "color": "green", "value": null }, { "color": "red", "value": 0.001 } ] }
-        },
-        "overrides": []
-      },
-      "options": {
-        "colorMode": "background",
-        "graphMode": "none",
-        "justifyMode": "center",
-        "textMode": "value",
-        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }
-      }
+      "targets": [{ "refId": "A", "expr": "max(labapp_probe_current_outage_seconds{target=~\"$target\"})", "instant": true }],
+      "fieldConfig": { "defaults": { "unit": "s", "decimals": 1, "color": { "mode": "thresholds" }, "thresholds": { "mode": "absolute", "steps": [ { "color": "green", "value": null }, { "color": "red", "value": 0.001 } ] } }, "overrides": [] },
+      "options": { "colorMode": "background", "graphMode": "none", "justifyMode": "center", "textMode": "value", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false } }
     },
     {
       "id": 3,
       "type": "stat",
-      "title": "Outages (time range)",
-      "description": "Write outages that ended in the selected time range. The exact list: run `labapp outages` on the PMM server.",
-      "gridPos": { "x": 8, "y": 0, "w": 4, "h": 4 },
+      "title": "Target rate",
+      "description": "Shop requests per second the load generator sends: base rate x hourly wave x flash sale.",
+      "gridPos": { "x": 8, "y": 1, "w": 4, "h": 4 },
       "datasource": { "type": "prometheus", "uid": "${datasource}" },
-      "targets": [
-        { "refId": "A", "expr": "sum(round(increase(labapp_probe_outages_total{target=~\"$target\"}[$__range])))", "instant": true }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "decimals": 0,
-          "color": { "mode": "thresholds" },
-          "thresholds": { "mode": "absolute", "steps": [ { "color": "green", "value": null }, { "color": "orange", "value": 1 } ] }
-        },
-        "overrides": []
-      },
-      "options": {
-        "colorMode": "value",
-        "graphMode": "none",
-        "justifyMode": "center",
-        "textMode": "value",
-        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }
-      }
+      "targets": [{ "refId": "A", "expr": "max(labapp_load_target_rate)", "instant": true }],
+      "fieldConfig": { "defaults": { "unit": "reqps", "decimals": 1, "color": { "mode": "fixed", "fixedColor": "text" } }, "overrides": [] },
+      "options": { "colorMode": "value", "graphMode": "area", "justifyMode": "center", "textMode": "value", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false } }
     },
     {
       "id": 4,
       "type": "stat",
-      "title": "Downtime (time range)",
-      "description": "Total write downtime of the outages that ended in the selected time range (approximate; exact values: `labapp outages`).",
-      "gridPos": { "x": 12, "y": 0, "w": 4, "h": 4 },
+      "title": "Completed",
+      "description": "Shop transactions completed per second (1 min average). Below the target rate = the database can't keep up and requests queue.",
+      "gridPos": { "x": 12, "y": 1, "w": 4, "h": 4 },
       "datasource": { "type": "prometheus", "uid": "${datasource}" },
-      "targets": [
-        { "refId": "A", "expr": "sum(increase(labapp_probe_downtime_seconds_total{target=~\"$target\"}[$__range]))", "instant": true }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "s",
-          "decimals": 1,
-          "color": { "mode": "thresholds" },
-          "thresholds": { "mode": "absolute", "steps": [ { "color": "green", "value": null }, { "color": "orange", "value": 0.001 } ] }
-        },
-        "overrides": []
-      },
-      "options": {
-        "colorMode": "value",
-        "graphMode": "none",
-        "justifyMode": "center",
-        "textMode": "value",
-        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }
-      }
+      "targets": [{ "refId": "A", "expr": "sum(rate(labapp_tx_total{result=~\"ok|out_of_stock\"}[1m]))", "instant": true }],
+      "fieldConfig": { "defaults": { "unit": "reqps", "decimals": 1, "color": { "mode": "fixed", "fixedColor": "green" } }, "overrides": [] },
+      "options": { "colorMode": "value", "graphMode": "area", "justifyMode": "center", "textMode": "value", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false } }
     },
     {
       "id": 5,
       "type": "stat",
-      "title": "Last outage",
-      "description": "Duration of the most recent completed write outage.",
-      "gridPos": { "x": 16, "y": 0, "w": 4, "h": 4 },
+      "title": "Shop errors",
+      "description": "Failed shop transactions per second (1 min average): lock timeouts, cancels, deadlocks, connection errors, expired and dropped requests.",
+      "gridPos": { "x": 16, "y": 1, "w": 4, "h": 4 },
       "datasource": { "type": "prometheus", "uid": "${datasource}" },
-      "targets": [
-        { "refId": "A", "expr": "max(labapp_probe_last_outage_seconds{target=~\"$target\"})", "instant": true }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "s",
-          "decimals": 2,
-          "color": { "mode": "fixed", "fixedColor": "text" }
-        },
-        "overrides": []
-      },
-      "options": {
-        "colorMode": "value",
-        "graphMode": "none",
-        "justifyMode": "center",
-        "textMode": "value",
-        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }
-      }
+      "targets": [{ "refId": "A", "expr": "sum(rate(labapp_tx_total{result!~\"ok|out_of_stock\"}[1m]))", "instant": true }],
+      "fieldConfig": { "defaults": { "unit": "reqps", "decimals": 2, "color": { "mode": "thresholds" }, "thresholds": { "mode": "absolute", "steps": [ { "color": "green", "value": null }, { "color": "orange", "value": 0.01 }, { "color": "red", "value": 1 } ] } }, "overrides": [] },
+      "options": { "colorMode": "background", "graphMode": "area", "justifyMode": "center", "textMode": "value", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false } }
     },
     {
       "id": 6,
       "type": "stat",
-      "title": "Write latency p95 (1 min)",
-      "description": "95% of the write checks in the last minute were faster than this.",
-      "gridPos": { "x": 20, "y": 0, "w": 4, "h": 4 },
+      "title": "Mode",
+      "description": "FLASH SALE: 3x traffic on a few hot products. PAUSED: labapp load pause.",
+      "gridPos": { "x": 20, "y": 1, "w": 4, "h": 4 },
       "datasource": { "type": "prometheus", "uid": "${datasource}" },
-      "targets": [
-        {
-          "refId": "A",
-          "expr": "histogram_quantile(0.95, sum by (le) (rate(labapp_probe_latency_seconds_bucket{check=\"write\", target=~\"$target\"}[1m])))",
-          "instant": true
-        }
-      ],
+      "targets": [{ "refId": "A", "expr": "max(labapp_load_flash_sale) + 2 * max(labapp_load_paused)", "instant": true }],
       "fieldConfig": {
         "defaults": {
-          "unit": "s",
+          "mappings": [ { "type": "value", "options": { "0": { "text": "NORMAL", "color": "green", "index": 0 }, "1": { "text": "FLASH SALE", "color": "purple", "index": 1 }, "2": { "text": "PAUSED", "color": "orange", "index": 2 }, "3": { "text": "PAUSED", "color": "orange", "index": 3 } } } ],
           "color": { "mode": "thresholds" },
-          "thresholds": { "mode": "absolute", "steps": [ { "color": "green", "value": null }, { "color": "orange", "value": 0.05 }, { "color": "red", "value": 0.25 } ] }
+          "thresholds": { "mode": "absolute", "steps": [ { "color": "green", "value": null } ] }
         },
         "overrides": []
       },
-      "options": {
-        "colorMode": "value",
-        "graphMode": "area",
-        "justifyMode": "center",
-        "textMode": "value",
-        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }
-      }
+      "options": { "colorMode": "background", "graphMode": "none", "justifyMode": "center", "textMode": "value", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false } }
+    },
+
+    { "id": 101, "type": "row", "title": "Availability (probe)", "collapsed": false, "gridPos": { "x": 0, "y": 5, "w": 24, "h": 1 }, "panels": [] },
+    {
+      "id": 10,
+      "type": "stat",
+      "title": "Outages (time range)",
+      "description": "Write outages that ended in the selected time range. The exact list: run `labapp outages` on the PMM server.",
+      "gridPos": { "x": 0, "y": 6, "w": 6, "h": 4 },
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "targets": [{ "refId": "A", "expr": "sum(round(increase(labapp_probe_outages_total{target=~\"$target\"}[$__range])))", "instant": true }],
+      "fieldConfig": { "defaults": { "decimals": 0, "color": { "mode": "thresholds" }, "thresholds": { "mode": "absolute", "steps": [ { "color": "green", "value": null }, { "color": "orange", "value": 1 } ] } }, "overrides": [] },
+      "options": { "colorMode": "value", "graphMode": "none", "justifyMode": "center", "textMode": "value", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false } }
     },
     {
-      "id": 7,
+      "id": 11,
+      "type": "stat",
+      "title": "Downtime (time range)",
+      "description": "Total write downtime of the outages that ended in the selected time range (approximate; exact values: `labapp outages`).",
+      "gridPos": { "x": 6, "y": 6, "w": 6, "h": 4 },
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "targets": [{ "refId": "A", "expr": "sum(increase(labapp_probe_downtime_seconds_total{target=~\"$target\"}[$__range]))", "instant": true }],
+      "fieldConfig": { "defaults": { "unit": "s", "decimals": 1, "color": { "mode": "thresholds" }, "thresholds": { "mode": "absolute", "steps": [ { "color": "green", "value": null }, { "color": "orange", "value": 0.001 } ] } }, "overrides": [] },
+      "options": { "colorMode": "value", "graphMode": "none", "justifyMode": "center", "textMode": "value", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false } }
+    },
+    {
+      "id": 12,
+      "type": "stat",
+      "title": "Last outage",
+      "description": "Duration of the most recent completed write outage.",
+      "gridPos": { "x": 12, "y": 6, "w": 6, "h": 4 },
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "targets": [{ "refId": "A", "expr": "max(labapp_probe_last_outage_seconds{target=~\"$target\"})", "instant": true }],
+      "fieldConfig": { "defaults": { "unit": "s", "decimals": 2, "color": { "mode": "fixed", "fixedColor": "text" } }, "overrides": [] },
+      "options": { "colorMode": "value", "graphMode": "none", "justifyMode": "center", "textMode": "value", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false } }
+    },
+    {
+      "id": 13,
+      "type": "stat",
+      "title": "Write latency p95 (1 min)",
+      "description": "95% of the probe's write checks in the last minute were faster than this.",
+      "gridPos": { "x": 18, "y": 6, "w": 6, "h": 4 },
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "targets": [{ "refId": "A", "expr": "histogram_quantile(0.95, sum by (le) (rate(labapp_probe_latency_seconds_bucket{check=\"write\", target=~\"$target\"}[1m])))", "instant": true }],
+      "fieldConfig": { "defaults": { "unit": "s", "color": { "mode": "thresholds" }, "thresholds": { "mode": "absolute", "steps": [ { "color": "green", "value": null }, { "color": "orange", "value": 0.05 }, { "color": "red", "value": 0.25 } ] } }, "overrides": [] },
+      "options": { "colorMode": "value", "graphMode": "area", "justifyMode": "center", "textMode": "value", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false } }
+    },
+    {
+      "id": 14,
       "type": "state-timeline",
       "title": "Availability",
       "description": "UP / DOWN over time, per target and check. Write = heartbeat writes on a persistent connection; connect = a new connection every second.",
-      "gridPos": { "x": 0, "y": 4, "w": 24, "h": 5 },
+      "gridPos": { "x": 0, "y": 10, "w": 24, "h": 5 },
       "datasource": { "type": "prometheus", "uid": "${datasource}" },
-      "targets": [
-        { "refId": "A", "expr": "labapp_probe_up{target=~\"$target\"}", "legendFormat": "{{target}} {{check}}" }
-      ],
+      "targets": [{ "refId": "A", "expr": "labapp_probe_up{target=~\"$target\"}", "legendFormat": "{{target}} {{check}}" }],
       "fieldConfig": {
         "defaults": {
-          "mappings": [
-            {
-              "type": "value",
-              "options": {
-                "0": { "text": "DOWN", "color": "red", "index": 0 },
-                "1": { "text": "UP", "color": "green", "index": 1 }
-              }
-            }
-          ],
+          "mappings": [ { "type": "value", "options": { "0": { "text": "DOWN", "color": "red", "index": 0 }, "1": { "text": "UP", "color": "green", "index": 1 } } } ],
           "color": { "mode": "thresholds" },
           "thresholds": { "mode": "absolute", "steps": [ { "color": "red", "value": null }, { "color": "green", "value": 1 } ] },
           "custom": { "fillOpacity": 80, "lineWidth": 0 }
         },
         "overrides": []
       },
-      "options": {
-        "mergeValues": true,
-        "showValue": "never",
-        "rowHeight": 0.8,
-        "alignValue": "left",
-        "legend": { "showLegend": false, "displayMode": "list", "placement": "bottom" },
-        "tooltip": { "mode": "single", "sort": "none" }
-      }
+      "options": { "mergeValues": true, "showValue": "never", "rowHeight": 0.8, "alignValue": "left", "legend": { "showLegend": false, "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "single", "sort": "none" } }
     },
     {
-      "id": 8,
+      "id": 15,
       "type": "timeseries",
       "title": "Write latency",
       "description": "Duration of successful write checks (heartbeat INSERT ... ON CONFLICT on a persistent connection).",
-      "gridPos": { "x": 0, "y": 9, "w": 12, "h": 8 },
+      "gridPos": { "x": 0, "y": 15, "w": 6, "h": 7 },
       "datasource": { "type": "prometheus", "uid": "${datasource}" },
       "targets": [
-        { "refId": "A", "expr": "histogram_quantile(0.50, sum by (le, target) (rate(labapp_probe_latency_seconds_bucket{check=\"write\", target=~\"$target\"}[$__rate_interval])))", "legendFormat": "{{target}} p50" },
-        { "refId": "B", "expr": "histogram_quantile(0.95, sum by (le, target) (rate(labapp_probe_latency_seconds_bucket{check=\"write\", target=~\"$target\"}[$__rate_interval])))", "legendFormat": "{{target}} p95" },
-        { "refId": "C", "expr": "histogram_quantile(0.99, sum by (le, target) (rate(labapp_probe_latency_seconds_bucket{check=\"write\", target=~\"$target\"}[$__rate_interval])))", "legendFormat": "{{target}} p99" }
+        { "refId": "A", "expr": "histogram_quantile(0.50, sum by (le, target) (rate(labapp_probe_latency_seconds_bucket{check=\"write\", target=~\"$target\"}[$__rate_interval])))", "legendFormat": "p50" },
+        { "refId": "B", "expr": "histogram_quantile(0.95, sum by (le, target) (rate(labapp_probe_latency_seconds_bucket{check=\"write\", target=~\"$target\"}[$__rate_interval])))", "legendFormat": "p95" },
+        { "refId": "C", "expr": "histogram_quantile(0.99, sum by (le, target) (rate(labapp_probe_latency_seconds_bucket{check=\"write\", target=~\"$target\"}[$__rate_interval])))", "legendFormat": "p99" }
       ],
-      "fieldConfig": {
-        "defaults": { "unit": "s", "custom": { "drawStyle": "line", "lineWidth": 1, "fillOpacity": 10, "showPoints": "never", "spanNulls": false } },
-        "overrides": []
-      },
-      "options": {
-        "legend": { "showLegend": true, "displayMode": "list", "placement": "bottom" },
-        "tooltip": { "mode": "multi", "sort": "desc" }
-      }
+      "fieldConfig": { "defaults": { "unit": "s", "custom": { "drawStyle": "line", "lineWidth": 1, "fillOpacity": 10, "showPoints": "never" } }, "overrides": [] },
+      "options": { "legend": { "showLegend": true, "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi", "sort": "desc" } }
     },
     {
-      "id": 9,
+      "id": 16,
       "type": "timeseries",
       "title": "Connect latency",
       "description": "Time to open a new connection and run SELECT 1, like an application that reconnects.",
-      "gridPos": { "x": 12, "y": 9, "w": 12, "h": 8 },
+      "gridPos": { "x": 6, "y": 15, "w": 6, "h": 7 },
       "datasource": { "type": "prometheus", "uid": "${datasource}" },
       "targets": [
-        { "refId": "A", "expr": "histogram_quantile(0.50, sum by (le, target) (rate(labapp_probe_latency_seconds_bucket{check=\"connect\", target=~\"$target\"}[$__rate_interval])))", "legendFormat": "{{target}} p50" },
-        { "refId": "B", "expr": "histogram_quantile(0.95, sum by (le, target) (rate(labapp_probe_latency_seconds_bucket{check=\"connect\", target=~\"$target\"}[$__rate_interval])))", "legendFormat": "{{target}} p95" },
-        { "refId": "C", "expr": "histogram_quantile(0.99, sum by (le, target) (rate(labapp_probe_latency_seconds_bucket{check=\"connect\", target=~\"$target\"}[$__rate_interval])))", "legendFormat": "{{target}} p99" }
+        { "refId": "A", "expr": "histogram_quantile(0.50, sum by (le, target) (rate(labapp_probe_latency_seconds_bucket{check=\"connect\", target=~\"$target\"}[$__rate_interval])))", "legendFormat": "p50" },
+        { "refId": "B", "expr": "histogram_quantile(0.95, sum by (le, target) (rate(labapp_probe_latency_seconds_bucket{check=\"connect\", target=~\"$target\"}[$__rate_interval])))", "legendFormat": "p95" },
+        { "refId": "C", "expr": "histogram_quantile(0.99, sum by (le, target) (rate(labapp_probe_latency_seconds_bucket{check=\"connect\", target=~\"$target\"}[$__rate_interval])))", "legendFormat": "p99" }
       ],
-      "fieldConfig": {
-        "defaults": { "unit": "s", "custom": { "drawStyle": "line", "lineWidth": 1, "fillOpacity": 10, "showPoints": "never", "spanNulls": false } },
-        "overrides": []
-      },
-      "options": {
-        "legend": { "showLegend": true, "displayMode": "list", "placement": "bottom" },
-        "tooltip": { "mode": "multi", "sort": "desc" }
-      }
+      "fieldConfig": { "defaults": { "unit": "s", "custom": { "drawStyle": "line", "lineWidth": 1, "fillOpacity": 10, "showPoints": "never" } }, "overrides": [] },
+      "options": { "legend": { "showLegend": true, "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi", "sort": "desc" } }
     },
     {
-      "id": 10,
+      "id": 17,
       "type": "timeseries",
-      "title": "Checks per second",
-      "description": "Successful and failed checks per second. Failed checks are red.",
-      "gridPos": { "x": 0, "y": 17, "w": 12, "h": 8 },
+      "title": "Probe checks per second",
+      "description": "Successful and failed probe checks per second. Failed checks are red.",
+      "gridPos": { "x": 12, "y": 15, "w": 6, "h": 7 },
       "datasource": { "type": "prometheus", "uid": "${datasource}" },
-      "targets": [
-        { "refId": "A", "expr": "sum by (check, result) (rate(labapp_probe_checks_total{target=~\"$target\"}[$__rate_interval]))", "legendFormat": "{{check}} {{result}}" }
-      ],
+      "targets": [ { "refId": "A", "expr": "sum by (check, result) (rate(labapp_probe_checks_total{target=~\"$target\"}[$__rate_interval]))", "legendFormat": "{{check}} {{result}}" } ],
       "fieldConfig": {
         "defaults": { "unit": "ops", "custom": { "drawStyle": "line", "lineWidth": 1, "fillOpacity": 10, "showPoints": "never" } },
-        "overrides": [
-          {
-            "matcher": { "id": "byRegexp", "options": ".*error" },
-            "properties": [ { "id": "color", "value": { "mode": "fixed", "fixedColor": "red" } } ]
-          }
-        ]
+        "overrides": [ { "matcher": { "id": "byRegexp", "options": ".*error" }, "properties": [ { "id": "color", "value": { "mode": "fixed", "fixedColor": "red" } } ] } ]
       },
-      "options": {
-        "legend": { "showLegend": true, "displayMode": "list", "placement": "bottom" },
-        "tooltip": { "mode": "multi", "sort": "desc" }
-      }
+      "options": { "legend": { "showLegend": true, "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi", "sort": "desc" } }
     },
     {
-      "id": 11,
+      "id": 18,
       "type": "timeseries",
       "title": "Outage duration",
       "description": "Seconds since the ongoing write outage started (0 when the database accepts writes).",
-      "gridPos": { "x": 12, "y": 17, "w": 12, "h": 8 },
+      "gridPos": { "x": 18, "y": 15, "w": 6, "h": 7 },
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "targets": [ { "refId": "A", "expr": "labapp_probe_current_outage_seconds{target=~\"$target\"}", "legendFormat": "{{target}}" } ],
+      "fieldConfig": { "defaults": { "unit": "s", "color": { "mode": "fixed", "fixedColor": "red" }, "custom": { "drawStyle": "line", "lineWidth": 1, "fillOpacity": 25, "showPoints": "never" } }, "overrides": [] },
+      "options": { "legend": { "showLegend": true, "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi", "sort": "desc" } }
+    },
+
+    { "id": 102, "type": "row", "title": "Shop workload", "collapsed": false, "gridPos": { "x": 0, "y": 22, "w": 24, "h": 1 }, "panels": [] },
+    {
+      "id": 20,
+      "type": "stat",
+      "title": "Checkout p95",
+      "description": "95% of checkouts in the last minute were faster than this (including the wait for a free worker).",
+      "gridPos": { "x": 0, "y": 23, "w": 12, "h": 4 },
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "targets": [{ "refId": "A", "expr": "histogram_quantile(0.95, sum by (le) (rate(labapp_tx_latency_seconds_bucket{tx=\"checkout\"}[1m])))", "instant": true }],
+      "fieldConfig": { "defaults": { "unit": "s", "color": { "mode": "thresholds" }, "thresholds": { "mode": "absolute", "steps": [ { "color": "green", "value": null }, { "color": "orange", "value": 0.25 }, { "color": "red", "value": 1 } ] } }, "overrides": [] },
+      "options": { "colorMode": "value", "graphMode": "area", "justifyMode": "center", "textMode": "value", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false } }
+    },
+    {
+      "id": 21,
+      "type": "stat",
+      "title": "Queued requests",
+      "description": "Requests waiting for a free worker. It grows when the database slows down: the pile-up that lock_timeout is there to stop.",
+      "gridPos": { "x": 12, "y": 23, "w": 12, "h": 4 },
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "targets": [{ "refId": "A", "expr": "max(labapp_tx_queue_depth)", "instant": true }],
+      "fieldConfig": { "defaults": { "decimals": 0, "color": { "mode": "thresholds" }, "thresholds": { "mode": "absolute", "steps": [ { "color": "green", "value": null }, { "color": "orange", "value": 20 }, { "color": "red", "value": 200 } ] } }, "overrides": [] },
+      "options": { "colorMode": "value", "graphMode": "area", "justifyMode": "center", "textMode": "value", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false } }
+    },
+    {
+      "id": 22,
+      "type": "timeseries",
+      "title": "Transactions per second, by type",
+      "description": "Completed transactions (ok and out of stock) per second, and the target rate (dashed).",
+      "gridPos": { "x": 0, "y": 27, "w": 12, "h": 8 },
       "datasource": { "type": "prometheus", "uid": "${datasource}" },
       "targets": [
-        { "refId": "A", "expr": "labapp_probe_current_outage_seconds{target=~\"$target\"}", "legendFormat": "{{target}}" }
+        { "refId": "A", "expr": "sum by (tx) (rate(labapp_tx_total{result=~\"ok|out_of_stock\"}[$__rate_interval]))", "legendFormat": "{{tx}}" },
+        { "refId": "B", "expr": "max(labapp_load_target_rate)", "legendFormat": "target rate" }
       ],
       "fieldConfig": {
+        "defaults": { "unit": "reqps", "custom": { "drawStyle": "line", "lineWidth": 1, "fillOpacity": 20, "stacking": { "mode": "normal", "group": "A" }, "showPoints": "never" } },
+        "overrides": [ { "matcher": { "id": "byName", "options": "target rate" }, "properties": [ { "id": "custom.stacking", "value": { "mode": "none" } }, { "id": "custom.fillOpacity", "value": 0 }, { "id": "custom.lineStyle", "value": { "fill": "dash", "dash": [10, 10] } }, { "id": "color", "value": { "mode": "fixed", "fixedColor": "text" } } ] } ]
+      },
+      "options": { "legend": { "showLegend": true, "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi", "sort": "desc" } }
+    },
+    {
+      "id": 23,
+      "type": "timeseries",
+      "title": "Response time p95, by type",
+      "description": "95th percentile of the response time users see: queue wait + transaction (log scale).",
+      "gridPos": { "x": 12, "y": 27, "w": 12, "h": 8 },
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "targets": [ { "refId": "A", "expr": "histogram_quantile(0.95, sum by (le, tx) (rate(labapp_tx_latency_seconds_bucket[$__rate_interval])))", "legendFormat": "{{tx}}" } ],
+      "fieldConfig": { "defaults": { "unit": "s", "custom": { "drawStyle": "line", "lineWidth": 1, "fillOpacity": 0, "showPoints": "never", "scaleDistribution": { "type": "log", "log": 10 } } }, "overrides": [] },
+      "options": { "legend": { "showLegend": true, "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi", "sort": "desc" } }
+    },
+    {
+      "id": 24,
+      "type": "timeseries",
+      "title": "Errors per second, by kind",
+      "description": "lock_timeout: waited too long for a lock. canceled: statement_timeout or pg_cancel_backend. connection: server down or pg_terminate_backend. expired: waited 30 s in the queue. dropped: queue full. out_of_stock (line) is a business outcome, not an error.",
+      "gridPos": { "x": 0, "y": 35, "w": 12, "h": 8 },
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "targets": [
+        { "refId": "A", "expr": "sum by (result) (rate(labapp_tx_total{result!~\"ok|out_of_stock\"}[$__rate_interval])) > 0", "legendFormat": "{{result}}" },
+        { "refId": "B", "expr": "sum(rate(labapp_tx_total{result=\"out_of_stock\"}[$__rate_interval]))", "legendFormat": "out_of_stock (not an error)" }
+      ],
+      "fieldConfig": {
+        "defaults": { "unit": "reqps", "custom": { "drawStyle": "bars", "lineWidth": 1, "fillOpacity": 60, "stacking": { "mode": "normal", "group": "A" }, "showPoints": "never" } },
+        "overrides": [ { "matcher": { "id": "byName", "options": "out_of_stock (not an error)" }, "properties": [ { "id": "custom.drawStyle", "value": "line" }, { "id": "custom.stacking", "value": { "mode": "none" } }, { "id": "custom.fillOpacity", "value": 0 }, { "id": "color", "value": { "mode": "fixed", "fixedColor": "text" } } ] } ]
+      },
+      "options": { "legend": { "showLegend": true, "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi", "sort": "desc" } }
+    },
+    {
+      "id": 25,
+      "type": "timeseries",
+      "title": "Errors per second, by transaction",
+      "description": "Which business actions fail: e.g. checkouts during a stock recount or a blocking migration, while product pages keep working.",
+      "gridPos": { "x": 12, "y": 35, "w": 12, "h": 8 },
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "targets": [ { "refId": "A", "expr": "sum by (tx) (rate(labapp_tx_total{result!~\"ok|out_of_stock\"}[$__rate_interval])) > 0", "legendFormat": "{{tx}}" } ],
+      "fieldConfig": { "defaults": { "unit": "reqps", "custom": { "drawStyle": "bars", "lineWidth": 1, "fillOpacity": 60, "stacking": { "mode": "normal", "group": "A" }, "showPoints": "never" } }, "overrides": [] },
+      "options": { "legend": { "showLegend": true, "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi", "sort": "desc" } }
+    },
+
+    { "id": 103, "type": "row", "title": "Reports and batch jobs", "collapsed": false, "gridPos": { "x": 0, "y": 43, "w": 24, "h": 1 }, "panels": [] },
+    {
+      "id": 30,
+      "type": "state-timeline",
+      "title": "Running",
+      "description": "When the long-running reports (sales dashboard ~30 s, lifetime-value export ~1 min, BI extract ~5 min) and the batch jobs run.",
+      "gridPos": { "x": 0, "y": 44, "w": 16, "h": 7 },
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "targets": [ { "refId": "A", "expr": "max by (job) (labapp_job_active)", "legendFormat": "{{job}}" } ],
+      "fieldConfig": {
         "defaults": {
-          "unit": "s",
-          "color": { "mode": "fixed", "fixedColor": "red" },
-          "custom": { "drawStyle": "line", "lineWidth": 1, "fillOpacity": 25, "showPoints": "never" }
+          "mappings": [ { "type": "value", "options": { "0": { "text": "idle", "color": "transparent", "index": 0 }, "1": { "text": "running", "color": "blue", "index": 1 } } } ],
+          "color": { "mode": "thresholds" },
+          "thresholds": { "mode": "absolute", "steps": [ { "color": "transparent", "value": null }, { "color": "blue", "value": 1 } ] },
+          "custom": { "fillOpacity": 80, "lineWidth": 0 }
         },
         "overrides": []
       },
-      "options": {
-        "legend": { "showLegend": true, "displayMode": "list", "placement": "bottom" },
-        "tooltip": { "mode": "multi", "sort": "desc" }
-      }
+      "options": { "mergeValues": true, "showValue": "never", "rowHeight": 0.8, "alignValue": "left", "legend": { "showLegend": false, "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "single", "sort": "none" } }
+    },
+    {
+      "id": 31,
+      "type": "bargauge",
+      "title": "Last run duration",
+      "description": "Duration of the last run of each report and batch job.",
+      "gridPos": { "x": 16, "y": 44, "w": 8, "h": 7 },
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "targets": [ { "refId": "A", "expr": "max by (job) (labapp_job_last_duration_seconds)", "legendFormat": "{{job}}", "instant": true } ],
+      "fieldConfig": { "defaults": { "unit": "s", "decimals": 0, "min": 0, "color": { "mode": "continuous-BlYlRd" } }, "overrides": [] },
+      "options": { "orientation": "horizontal", "displayMode": "basic", "showUnfilled": true, "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false } }
     }
   ]
 }
