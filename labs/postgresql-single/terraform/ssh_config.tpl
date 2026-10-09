@@ -3,7 +3,7 @@
 
 Host pmm-server
     HostName ${pmm_server_public_ip}
-    User ec2-user
+    User ${ssh_user}
 %{ if ssh_private_key_path != null ~}
     IdentityFile "${ssh_private_key_path}"
 %{ endif ~}
@@ -12,7 +12,7 @@ Host pmm-server
 
 Host postgresql-source
     HostName ${postgresql_internal_ip}
-    User ec2-user
+    User ${ssh_user}
 %{ if ssh_private_key_path != null ~}
     IdentityFile "${ssh_private_key_path}"
 %{ endif ~}

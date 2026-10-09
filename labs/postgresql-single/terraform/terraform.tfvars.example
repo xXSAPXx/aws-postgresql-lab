@@ -8,5 +8,9 @@ aws_key_pair               = "<EXAMPLE>"
 # Your public IP with /32 (get it with: curl -s https://checkip.amazonaws.com). Only this IP can reach SSH and the PMM UI.
 admin_cidr                 = "203.0.113.10/32"
 
+# Optional: instance types (default t2.small). For load tests use a non-burstable type, e.g. m7i.large.
+# postgresql_instance_type = "m7i.large"
+# pmm_instance_type        = "t2.small"
+
 # Optional: private key of that key pair, used in the generated SSH config (~/.ssh/aws-postgresql-lab.conf).
 # ssh_private_key_path     = "~/.ssh/<key>"

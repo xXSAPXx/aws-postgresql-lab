@@ -3,4 +3,7 @@ pmm_server_image: percona/pmm-server:3
 pmm_server_container_name: pmm-server
 pmm_server_volume: pmm-data
 
+# Docker CE repository: Docker publishes one for RHEL and one for CentOS-compatible systems (Rocky, Alma).
+pmm_server_docker_repo: "https://download.docker.com/linux/{{ 'rhel' if ansible_facts['distribution'] == 'RedHat' else 'centos' }}/docker-ce.repo"
+
 # pmm_admin_password: set by the lab (group_vars), required.

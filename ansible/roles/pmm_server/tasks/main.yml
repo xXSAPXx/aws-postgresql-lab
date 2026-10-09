@@ -5,7 +5,7 @@
 
 - name: Add the Docker CE repository
   ansible.builtin.get_url:
-    url: https://download.docker.com/linux/rhel/docker-ce.repo
+    url: "{{ pmm_server_docker_repo }}"
     dest: /etc/yum.repos.d/docker-ce.repo
     owner: root
     group: root

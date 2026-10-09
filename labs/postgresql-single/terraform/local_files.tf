@@ -12,6 +12,7 @@ resource "local_file" "ssh_config" {
   content = templatefile("${path.module}/ssh_config.tpl", {
     pmm_server_public_ip   = module.pmm_server.pmm_server_public_ip
     postgresql_internal_ip = module.postgresql_ec2_instance.postgresql_ec2_instance_internal_ip
+    ssh_user               = local.ssh_user
     ssh_private_key_path   = var.ssh_private_key_path
   })
 }

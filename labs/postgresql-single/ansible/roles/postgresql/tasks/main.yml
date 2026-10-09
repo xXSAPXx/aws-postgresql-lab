@@ -3,7 +3,7 @@
 # Percona Distribution for PostgreSQL installation:
 ##################################################################
 
-- name: Disable the RHEL PostgreSQL module (Percona packages are used instead)
+- name: Disable the distribution's PostgreSQL module (Percona packages are used instead)
   ansible.builtin.command: dnf -y module disable postgresql
   changed_when: false
 

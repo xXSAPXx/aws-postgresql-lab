@@ -64,5 +64,10 @@ resource "aws_instance" "postgresql_ec2_instance" {
   tags = {
     Name = var.postgresql_tag_name
   }
+
+  # A newer image (e.g. from an "always the latest" AMI lookup) must not replace a running server:
+  lifecycle {
+    ignore_changes = [ami]
+  }
 }
 
