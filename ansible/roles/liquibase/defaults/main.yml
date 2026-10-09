@@ -1,0 +1,26 @@
+---
+# Liquibase applies the lab's SQL migrations (changelogs in the repo). It runs on the PMM server, like a CI/CD runner.
+liquibase_version: 5.0.4
+liquibase_checksum: sha256:bb08638d70dddd6af8cca6e033148576f8214b5996831b1f8864eb3528f4cfce
+liquibase_download_url: https://github.com/liquibase/liquibase/releases/download/v{{ liquibase_version }}/liquibase-{{ liquibase_version }}.tar.gz
+liquibase_java_package: java-21-openjdk-headless # Liquibase 5 needs Java 17 or newer
+
+# Liquibase 5 ships no PostgreSQL driver: the official, self-contained JDBC driver from Maven Central.
+liquibase_jdbc_version: 42.7.14
+liquibase_jdbc_checksum: sha256:73914527305a40cce504b0d3d90b23caf565136912d607ae8ae7c5895512332c
+liquibase_jdbc_download_url: https://repo1.maven.org/maven2/org/postgresql/postgresql/{{ liquibase_jdbc_version }}/postgresql-{{ liquibase_jdbc_version }}.jar
+
+liquibase_dir: /opt/liquibase
+liquibase_projects_dir: /opt/liquibase-projects
+
+# One project per database, set by the lab (group_vars). Example:
+#   - name: shop                                   # wrapper command: liquibase-shop
+#     changelog_dir: "{{ playbook_dir }}/../../../schema/shop"
+#     url: jdbc:postgresql://postgresql-source:5432/shop
+#     username: shop_migrator
+#     password: "..."
+#     parameters: { shop_scale: 1 }               # changelog parameters, ${shop_scale} in the SQL
+liquibase_projects: []
+
+# OS user who may run the wrapper commands without sudo (reads the credentials in /etc/liquibase).
+liquibase_os_user: "{{ ansible_user }}"

@@ -39,9 +39,10 @@
     - postgresql_tools
     - pmm_client
 
-- name: Load generator and probe (run on the PMM server)
+- name: Application side (runs on the PMM server)
   hosts: pmm_server
   become: true
   roles:
     - postgresql_client
+    - liquibase # applies schema/shop migrations (and generates the data on the first run)
     - labapp

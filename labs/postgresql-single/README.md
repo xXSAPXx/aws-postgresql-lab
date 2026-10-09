@@ -39,7 +39,7 @@ cd ../ansible
 ansible-playbook site.yml    # about 10 minutes on the first run
 ```
 
-`terraform apply` also writes the SSH config (`~/.ssh/aws-postgresql-lab.conf`) and the Ansible inventory (`ansible/inventory.ini`) with the new IPs. The playbook installs PostgreSQL and PMM, generates the lab passwords into `ansible/credentials/` and registers PostgreSQL in PMM.
+`terraform apply` also writes the SSH config (`~/.ssh/aws-postgresql-lab.conf`) and the Ansible inventory (`ansible/inventory.ini`) with the new IPs. The playbook installs PostgreSQL and PMM, generates the lab passwords into `ansible/credentials/`, registers PostgreSQL in PMM, and builds the shop database with Liquibase (the first run also generates its data, about 4 minutes).
 
 ## Connect
 
@@ -58,6 +58,24 @@ psql -h postgresql-source -U dba postgres
 ```
 
 PMM UI: the `pmm_url` from `terraform output`. Log in as `admin` with the password from `ansible/credentials/pmm_admin_password`.
+
+## The shop database
+
+The lab's application database: an online shop with 28 tables, about 40 foreign keys, hot rows and big tables, about 1.6 GB of generated data, and five documented production flaws to fix as exercises. It's built and changed only through Liquibase migrations: see [schema/shop](../../schema/shop/README.md).
+
+To change the schema, add a migration file to `schema/shop/changes/` and apply only the migrations (seconds, everything else keeps running):
+
+```bash
+cd labs/postgresql-single/ansible
+ansible-playbook migrate.yml
+```
+
+On the PMM server, `liquibase-shop status`, `update-sql`, `history` and `rollback-count` run Liquibase directly. The shop users log in from there too (passwords in `~/.pgpass`):
+
+```bash
+psql -h postgresql-source -U shop_app shop         # the application: DML only, 5 s statement timeout
+psql -h postgresql-source -U shop_reporting shop   # reports: read-only
+```
 
 ## Generate load
 

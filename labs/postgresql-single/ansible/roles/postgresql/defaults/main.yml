@@ -39,8 +39,12 @@ postgresql_monitoring_user: pmm
 # Application and admin users and databases, set by the lab (group_vars). Example:
 #   postgresql_app_users:     [{ name: bench, password: "..." }, { name: dba, password: "...", role_attr_flags: "LOGIN,SUPERUSER" }]
 #   postgresql_app_databases: [{ name: bench, owner: bench }]
+#   Optional per user: role_attr_flags (default LOGIN), conn_limit, configuration (ALTER ROLE ... SET, e.g. { statement_timeout: 5s }).
 postgresql_app_users: []
 postgresql_app_databases: []
+
+# Role memberships, e.g. [{ groups: [shop_owner], target_roles: [shop_migrator] }]
+postgresql_memberships: []
 
 # Lab convenience: the postgres OS user may use sudo without a password.
 postgresql_os_user_sudo: true

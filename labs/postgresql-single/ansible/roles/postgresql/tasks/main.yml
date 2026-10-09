@@ -104,16 +104,27 @@
   become: true
   become_user: postgres
 
-- name: Create the application and admin users
+- name: Create the application and admin users (with their per-role settings)
   community.postgresql.postgresql_user:
     name: "{{ item.name }}"
-    password: "{{ item.password }}"
+    password: "{{ item.password | default(omit) }}"
     role_attr_flags: "{{ item.role_attr_flags | default('LOGIN') }}"
+    conn_limit: "{{ item.conn_limit | default(omit) }}"
+    configuration: "{{ item.configuration | default(omit) }}"
     login_db: postgres
   loop: "{{ postgresql_app_users }}"
   become: true
   become_user: postgres
   no_log: true
+
+- name: Grant role memberships
+  community.postgresql.postgresql_membership:
+    memberships: "{{ postgresql_memberships }}"
+    granted_by_any: true
+    login_db: postgres
+  become: true
+  become_user: postgres
+  when: postgresql_memberships | length > 0
 
 - name: Create the application databases
   community.postgresql.postgresql_db:
