@@ -2,12 +2,17 @@
 # labapp: the lab's simulated application (tools/labapp). Runs on the PMM server.
 labapp_dir: /opt/labapp
 labapp_user: labapp
-labapp_source: "{{ role_path }}/../../../tools/labapp/labapp.py"
+labapp_source_dir: "{{ role_path }}/../../../tools/labapp"
+labapp_files: [labapp.py, common.py, workload.py]
 labapp_python_packages:
   - psycopg[binary]>=3.2
   - prometheus_client>=0.20
 
-# Probe settings (seconds): write check, connect check, timeout for connecting / each statement.
+##################################################################
+# Probe: availability and latency (labapp-probe)
+##################################################################
+
+# Seconds: write check, connect check, timeout for connecting / each statement.
 labapp_probe_interval: 0.25
 labapp_probe_connect_interval: 1.0
 labapp_probe_timeout: 2.0
@@ -17,12 +22,42 @@ labapp_probe_timeout: 2.0
 #     dsn: "host=postgresql-source dbname=labapp user=labapp password=..."
 labapp_targets: []
 
-# Metrics for PMM: the probe listens on this port, and PMM (in its container) collects them over the
-# host's private IP.
+# The probe listens on this port; PMM (in its container) collects it over the host's private IP.
 labapp_metrics_port: 9300
 labapp_metrics_host: "{{ private_ip }}"
 
-# The PMM server on this host: API for the metrics registration, Grafana for annotations and the dashboard.
+##################################################################
+# Workload: the shop's traffic (labapp-workload)
+##################################################################
+
+labapp_workload_enabled: true
+labapp_workload_rate: 30 # base requests per second (live: labapp load rate N)
+labapp_workload_workers: 24 # connections as shop_app
+labapp_workload_metrics_port: 9302
+labapp_workload_control_port: 9301 # 127.0.0.1 only, used by `labapp load`
+
+# One connection string per role, set by the lab (group_vars): app, reporting, analytics, batch.
+labapp_workload_dsn: {}
+
+# Transaction mix (weights); empty = the defaults in tools/labapp/workload.py.
+labapp_workload_mix: {}
+
+# Cycles sized for a 1-2 hour lab session (seconds).
+labapp_workload_wave: { period: 3600, amplitude: 0.4 } # a "day" every hour: +-40% around the base rate
+labapp_workload_flash_sale: { every: 1800, first: 1200, duration: 180, multiplier: 3, hot_products: 20 }
+labapp_workload_jobs:
+  sales_dashboard: { every: 120, first: 60, target: 30 } # ~30 s, shop_reporting
+  lifetime_value_export: { every: 300, first: 150, target: 60 } # ~1 min slow cursor, shop_analytics
+  bi_extract: { every: 900, first: 420, target: 300 } # ~5 min REPEATABLE READ, shop_analytics
+  cart_cleanup: { every: 600, first: 300 } # bulk UPDATE + DELETE, shop_batch
+  restock: { every: 900, first: 450 } # shop_batch
+  stock_recount: { every: 1200, first: 600, target: 90, mode: single_transaction } # or: batched
+
+##################################################################
+# PMM server on this host
+##################################################################
+
+# API for the metrics registration, Grafana for annotations and the dashboards.
 labapp_pmm_url: https://127.0.0.1
 labapp_pmm_container: pmm-server
 labapp_pmm_user: admin

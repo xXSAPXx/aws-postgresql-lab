@@ -1,6 +1,9 @@
 ---
-# Stored in the dashboard's description: a different revision means the repo version changed and is uploaded.
-labapp_dashboard_revision: "{{ (lookup('ansible.builtin.file', 'labapp-dashboard.json') | hash('sha1'))[:12] }}"
-labapp_dashboard_description: >-
-  Managed by Ansible (role labapp, revision {{ labapp_dashboard_revision }}).
-  Edit ansible/roles/labapp/files/labapp-dashboard.json in the repo: re-running the playbook replaces changes made here.
+# Services PMM collects metrics from, and the dashboards uploaded to PMM.
+labapp_pmm_exporters: >-
+  {{ [{'name': 'labapp-probe', 'port': labapp_metrics_port}]
+     + ([{'name': 'labapp-workload', 'port': labapp_workload_metrics_port}] if labapp_workload_enabled else []) }}
+# One dashboard for the probe and the shop workload. Without the workload, its rows show "No data".
+labapp_dashboards:
+  - file: labapp-dashboard.json
+    uid: labapp

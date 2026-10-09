@@ -2,9 +2,12 @@
 """labapp: the lab's simulated application.
 
 Commands:
-  labapp probe --config FILE          Run the availability probe (normally as the labapp-probe service).
+  labapp probe --config FILE          Run the availability probe (the labapp-probe service).
   labapp outages [--log FILE] [--last N]
                                       List the outages the probe measured.
+  labapp workload --config FILE       Run the shop workload (the labapp-workload service), see workload.py.
+  labapp load status | rate N | pause | resume | flash-sale [SECONDS] | run JOB
+                                      Control the running workload.
 
 The probe checks every target from the application's side:
   write    On a persistent connection, a heartbeat row is written every `interval` seconds.
@@ -16,7 +19,7 @@ durations are accurate to about one `interval` (longer if the server stops answe
 Metrics are served in Prometheus format for PMM, outages are appended to a JSON-lines log, and each outage
 is marked as an annotation on the PMM (Grafana) dashboards.
 
-Config (JSON):
+Probe config (JSON):
   {
     "interval": 0.25, "connect_interval": 1.0, "timeout": 2.0,
     "metrics_address": "0.0.0.0", "metrics_port": 9300,
@@ -27,21 +30,20 @@ Config (JSON):
 """
 
 import argparse
-import base64
 import json
 import logging
 import signal
 import socket
-import ssl
 import sys
 import threading
 import time
+import urllib.error
 import urllib.request
-from datetime import datetime, timezone
-from queue import Queue
 
-LOG = logging.getLogger("labapp")
+from common import LOG, Annotations, connect, short_error, utc
+
 DEFAULT_OUTAGE_LOG = "/var/log/labapp/outages.jsonl"
+DEFAULT_CONTROL_URL = "http://127.0.0.1:9301"
 
 # Latency buckets (seconds): 1 ms .. 5 s.
 BUCKETS = (0.001, 0.0025, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0)
@@ -59,38 +61,8 @@ ON CONFLICT (probe) DO UPDATE SET seq = EXCLUDED.seq, updated_at = EXCLUDED.upda
 RETURNING seq"""
 
 
-def utc(ts):
-    """Unix time -> ISO 8601 UTC with milliseconds."""
-    return datetime.fromtimestamp(ts, timezone.utc).isoformat(timespec="milliseconds")
-
-
-def short_error(exc):
-    text = str(exc).strip()
-    first_line = text.splitlines()[0] if text else ""
-    return f"{type(exc).__name__}: {first_line}"[:200]
-
-
-def connect(dsn, timeout, application_name):
-    """Connection with bounded waits: connect, every statement and dead TCP peers all fail within `timeout`."""
-    import psycopg
-
-    timeout_ms = int(timeout * 1000)
-    return psycopg.connect(
-        dsn,
-        autocommit=True,
-        application_name=application_name,
-        connect_timeout=max(2, round(timeout)),  # libpq treats values below 2 s as 2 s
-        keepalives=1,
-        keepalives_idle=5,
-        keepalives_interval=1,
-        keepalives_count=3,
-        tcp_user_timeout=timeout_ms,
-        options=f"-c statement_timeout={timeout_ms}",
-    )
-
-
-class Metrics:
-    """Prometheus metrics, scraped by PMM."""
+class ProbeMetrics:
+    """Prometheus metrics of the probe, scraped by PMM."""
 
     def __init__(self):
         from prometheus_client import Counter, Gauge, Histogram
@@ -124,59 +96,6 @@ class Metrics:
             metric.labels(target)
 
 
-class Annotations:
-    """Marks outages on the PMM (Grafana) dashboards. Runs in its own thread, so it never delays a check."""
-
-    def __init__(self, cfg):
-        self.url = cfg["url"].rstrip("/") + "/api/annotations"
-        token = base64.b64encode(f'{cfg["user"]}:{cfg["password"]}'.encode()).decode()
-        self.headers = {"Authorization": f"Basic {token}", "Content-Type": "application/json"}
-        self.ssl = ssl.create_default_context()
-        if not cfg.get("verify_tls", True):
-            self.ssl.check_hostname = False
-            self.ssl.verify_mode = ssl.CERT_NONE
-        self.queue = Queue()
-        self.ids = {}  # (target, start) -> annotation id
-        threading.Thread(target=self._run, name="annotations", daemon=True).start()
-
-    def started(self, target, start, error):
-        self.queue.put(("start", target, start, None, error))
-
-    def ended(self, target, start, end, error):
-        self.queue.put(("end", target, start, end, error))
-
-    def _request(self, method, path, body):
-        request = urllib.request.Request(
-            self.url + path, data=json.dumps(body).encode(), headers=self.headers, method=method
-        )
-        with urllib.request.urlopen(request, timeout=5, context=self.ssl) as response:
-            return json.load(response)
-
-    def _run(self):
-        while True:
-            kind, target, start, end, error = self.queue.get()
-            # Tagged with the target too: PMM's dashboards show annotations tagged with their node / service name.
-            tags = ["labapp", "outage", target]
-            try:
-                if kind == "start":
-                    body = {"time": int(start * 1000), "tags": tags, "text": f"Write outage started on {target}: {error}"}
-                    self.ids[(target, start)] = self._request("POST", "", body).get("id")
-                else:
-                    body = {
-                        "time": int(start * 1000),
-                        "timeEnd": int(end * 1000),
-                        "tags": tags,
-                        "text": f"Write outage on {target}: {end - start:.1f} s ({error})",
-                    }
-                    annotation_id = self.ids.pop((target, start), None)
-                    if annotation_id:
-                        self._request("PATCH", f"/{annotation_id}", body)
-                    else:
-                        self._request("POST", "", body)
-            except Exception as exc:  # PMM down or busy: the probe keeps measuring regardless
-                LOG.warning("could not write the Grafana annotation: %s", short_error(exc))
-
-
 class Target:
     """One database endpoint, checked by a write thread and a connect thread."""
 
@@ -205,7 +124,7 @@ class Target:
             tick, started = time.monotonic(), time.time()
             try:
                 if conn is None:
-                    conn = connect(self.dsn, self.timeout, "labapp-probe")
+                    conn = connect(self.dsn, self.timeout, "labapp-probe", statement_timeout=self.timeout)
                     conn.execute(CREATE_SQL)
                 seq += 1
                 conn.execute(WRITE_SQL, (self.probe_id, seq)).fetchone()
@@ -224,7 +143,7 @@ class Target:
         while not stop.is_set():
             tick, started = time.monotonic(), time.time()
             try:
-                with connect(self.dsn, self.timeout, "labapp-probe-connect") as conn:
+                with connect(self.dsn, self.timeout, "labapp-probe-connect", statement_timeout=self.timeout) as conn:
                     conn.execute("SELECT 1").fetchone()
                 self.check_done("connect", True, time.monotonic() - tick, time.time())
             except Exception as exc:
@@ -245,13 +164,17 @@ class Target:
             self._track_outage(ok, when, error)
 
     def _track_outage(self, ok, when, error):
+        # Tagged with the target too: PMM's dashboards show annotations tagged with their service name.
+        tags = ["labapp", "outage", self.name]
         with self.lock:
             if not ok:
                 if self.outage_start is None:
                     self.outage_start, self.outage_error, self.failed_checks = when, error, 0
                     LOG.warning("%s: write outage started at %s: %s", self.name, utc(when), error)
                     if self.annotations:
-                        self.annotations.started(self.name, when, error)
+                        self.annotations.add(
+                            (self.name, when), when, f"Write outage started on {self.name}: {error}", tags
+                        )
                 self.failed_checks += 1
                 self.metrics.current.labels(self.name).set(time.time() - self.outage_start)
                 return
@@ -276,7 +199,10 @@ class Target:
                 self.metrics.downtime.labels(self.name).inc(duration)
                 self.metrics.last.labels(self.name).set(duration)
                 if self.annotations:
-                    self.annotations.ended(self.name, self.outage_start, when, self.outage_error)
+                    self.annotations.finish(
+                        (self.name, self.outage_start), self.outage_start, when,
+                        f"Write outage on {self.name}: {duration:.1f} s ({self.outage_error})", tags,
+                    )
                 self.outage_start = None
             self.last_ok = when
             self.metrics.current.labels(self.name).set(0)
@@ -292,19 +218,23 @@ class Target:
 # ---- commands ------------------------------------------------------------------------------------
 
 
+def stop_event():
+    stop = threading.Event()
+    signal.signal(signal.SIGTERM, lambda *_: stop.set())
+    signal.signal(signal.SIGINT, lambda *_: stop.set())
+    return stop
+
+
 def cmd_probe(args):
     from prometheus_client import start_http_server
 
     with open(args.config, encoding="utf-8") as f:
         cfg = json.load(f)
 
-    metrics = Metrics()
+    metrics = ProbeMetrics()
     start_http_server(int(cfg.get("metrics_port", 9300)), addr=cfg.get("metrics_address", "0.0.0.0"))
     annotations = Annotations(cfg["grafana"]) if cfg.get("grafana") else None
-
-    stop = threading.Event()
-    signal.signal(signal.SIGTERM, lambda *_: stop.set())
-    signal.signal(signal.SIGINT, lambda *_: stop.set())
+    stop = stop_event()
 
     targets = []
     for t in cfg["targets"]:
@@ -346,6 +276,36 @@ def cmd_outages(args):
     print(f"\n{len(records)} outages, {total:.3f} s of write downtime in total.")
 
 
+def cmd_workload(args):
+    import workload
+
+    with open(args.config, encoding="utf-8") as f:
+        cfg = json.load(f)
+    workload.run(cfg, stop_event())
+
+
+def cmd_load(args):
+    """Talk to the running workload's control endpoint (local only)."""
+    path = {
+        "status": "/status",
+        "rate": f"/rate/{args.value}",
+        "pause": "/pause",
+        "resume": "/resume",
+        "flash-sale": f"/flash-sale/{args.value or ''}".rstrip("/"),
+        "run": f"/run/{args.value}",
+    }[args.action]
+    if args.action in ("rate", "run") and not args.value:
+        sys.exit(f"labapp load {args.action} needs a value")
+    method = "GET" if args.action == "status" else "POST"
+    try:
+        with urllib.request.urlopen(urllib.request.Request(args.url + path, method=method), timeout=5) as response:
+            print(json.dumps(json.load(response), indent=2))
+    except urllib.error.HTTPError as exc:
+        sys.exit(f"{exc.code}: {exc.read().decode().strip()}")
+    except OSError as exc:
+        sys.exit(f"The workload is not reachable at {args.url} ({exc}). Is labapp-workload running?")
+
+
 def main():
     parser = argparse.ArgumentParser(prog="labapp", description="The lab's simulated application.")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -359,6 +319,17 @@ def main():
     outages.add_argument("--log", default=DEFAULT_OUTAGE_LOG, help=f"outage log (default: {DEFAULT_OUTAGE_LOG})")
     outages.add_argument("--last", type=int, default=20, help="show the last N outages (default: 20)")
     outages.set_defaults(func=cmd_outages)
+
+    work = sub.add_parser("workload", help="run the shop workload")
+    work.add_argument("--config", required=True, help="JSON config file")
+    work.add_argument("--debug", action="store_true", help="log every failed transaction")
+    work.set_defaults(func=cmd_workload)
+
+    load = sub.add_parser("load", help="control the running workload")
+    load.add_argument("action", choices=["status", "rate", "pause", "resume", "flash-sale", "run"])
+    load.add_argument("value", nargs="?", help="rate: requests per second; flash-sale: seconds; run: job name")
+    load.add_argument("--url", default=DEFAULT_CONTROL_URL, help=f"control endpoint (default: {DEFAULT_CONTROL_URL})")
+    load.set_defaults(func=cmd_load)
 
     args = parser.parse_args()
     logging.basicConfig(

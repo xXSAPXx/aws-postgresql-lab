@@ -47,7 +47,7 @@ A **role** is a folder of related steps, like one chapter of a runbook. Ansible 
 | `postgresql_tools` | `ansible/roles/` | Live monitoring on the database server: pg_activity (overview of sessions, waits, blocking) and pg_top (per-PID query, EXPLAIN, locks) |
 | `postgresql_client` | `ansible/roles/` | psql and pgbench on the load generator, database passwords in `~/.pgpass` |
 | `liquibase` | `ansible/roles/` | Java, Liquibase and the PostgreSQL JDBC driver on the PMM server; copies a changelog from the repo (e.g. `schema/shop`) and applies the pending migrations; `liquibase-<db>` wrapper command |
-| `labapp` | `ansible/roles/` | The lab's simulated application ([tools/labapp](../tools/labapp/README.md)): the availability probe as a service, its metrics in PMM, the "Lab: Application probe" dashboard |
+| `labapp` | `ansible/roles/` | The lab's simulated application ([tools/labapp](../tools/labapp/README.md)): the availability probe and the shop workload as services, their metrics in PMM, the "Lab: Application" dashboard |
 | `postgresql` | `labs/postgresql-single/ansible/roles/` | Percona PostgreSQL 17, its configuration, pg_stat_monitor, the `pmm` monitoring user |
 
 Roles in `ansible/roles/` are shared by every lab, like the Terraform modules in `modules/`. A role that only one lab needs lives in that lab's own `ansible/roles/`.

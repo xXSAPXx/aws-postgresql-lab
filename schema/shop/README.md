@@ -1,6 +1,6 @@
 # The shop database
 
-An online shop's database: 28 tables, about 40 foreign keys, hot rows, big append-only tables and a partitioned audit log. It's built and changed only through **Liquibase migrations** in this folder, like a production database owned by an application team. The [labapp](../../tools/labapp/README.md) workload (next phase) runs against it while you do DBA work.
+An online shop's database: 28 tables, about 40 foreign keys, hot rows, big append-only tables and a partitioned audit log. It's built and changed only through **Liquibase migrations** in this folder, like a production database owned by an application team. The [labapp workload](../../tools/labapp/README.md#the-workload) runs the shop's traffic, reports and batch jobs against it while you do DBA work.
 
 ## How it's built
 
@@ -22,8 +22,10 @@ Liquibase's own tables are pinned to the `public` schema (`liquibase-schema-name
 | `shop_migrator` | yes | Runs the migrations. Acts as `shop_owner` automatically (`ALTER ROLE ... SET role`), `lock_timeout` 5 s |
 | `shop_app` | yes | The application: `SELECT/INSERT/UPDATE/DELETE` only. `statement_timeout` 5 s, `lock_timeout` 2 s, `idle_in_transaction_session_timeout` 30 s, 60 connections |
 | `shop_reporting` | yes | Reports: `SELECT` only, `statement_timeout` 60 s, `work_mem` 32 MB, 10 connections |
+| `shop_analytics` | yes | Long-running reports and exports: `SELECT` only, `statement_timeout` 15 min, `work_mem` 64 MB, 5 connections |
+| `shop_batch` | yes | Scheduled batch jobs: `SELECT`, plus `UPDATE` on `inventory` and `carts`, `DELETE` on `carts` and `cart_items`, `INSERT` on `stock_movements`. `statement_timeout` 10 min, 5 connections |
 
-Grants come from default privileges (`0001-schema-and-access.sql`), so new tables get them automatically. Only these roles (and `pmm`) can connect to the `shop` database, only from the PMM server.
+The workload uses each role for its part: the application as `shop_app`, the reports and batch jobs as the other three. Grants come from default privileges (`0001-schema-and-access.sql`, `0010-analytics-and-batch-access.sql`), so new tables get them automatically. Only these roles (and `pmm`) can connect to the `shop` database, only from the PMM server.
 
 Every other session, DBAs included, has the server-wide `lock_timeout` of 5 s (`conf.d/01-lab.conf`): a session that waits longer for a lock gives up instead of queueing, so others don't pile up behind it. For long maintenance, `SET lock_timeout = 0` in your session.
 
@@ -46,11 +48,11 @@ Popularity is skewed like real traffic: about 21% of all order lines are for the
 
 ## Migrations: the workflow
 
-1. Add a file in `changes/`, numbered after the last one, e.g. `changes/0010-add-orders-channel.sql`:
+1. Add a file in `changes/`, numbered after the last one, e.g. `changes/0011-add-orders-channel.sql`:
    ```sql
    --liquibase formatted sql
 
-   --changeset yourname:0010-add-orders-channel
+   --changeset yourname:0011-add-orders-channel
    --comment: Where the order came from.
    ALTER TABLE shop.orders ADD COLUMN channel text NOT NULL DEFAULT 'web';
    --rollback ALTER TABLE shop.orders DROP COLUMN channel;
@@ -59,7 +61,7 @@ Popularity is skewed like real traffic: about 21% of all order lines are for the
    ```bash
    ansible-playbook migrate.yml
    ```
-3. Watch the cost on the **Lab: Application probe** dashboard and in PMM while the workload runs.
+3. Watch the cost on the **Lab: Application** dashboard and in PMM while the workload runs: downtime, queued requests, lock timeouts.
 
 On the PMM server, `liquibase-shop` runs Liquibase directly:
 
@@ -78,7 +80,7 @@ Rules, as in production:
 
 ## Exercises: the built-in flaws
 
-The schema is mostly clean, with five typical production problems built in on purpose. Find them with PMM, pg_activity and the catalog, then fix them with migrations while the workload runs, without downtime on the dashboard.
+The schema is mostly clean, with six typical production problems built in on purpose. Find them with PMM, pg_activity and the catalog, then fix them with migrations while the workload runs, without downtime on the dashboard.
 
 1. **An integer primary key close to its limit.** `customers.id` is an `integer` (max 2,147,483,647) and its identity starts at 2,140,000,000, so about 7 million new customers are left. Six tables reference it with `integer` columns.
    ```sql
@@ -105,5 +107,7 @@ The schema is mostly clean, with five typical production problems built in on pu
    Goal: drop it without blocking writes.
 
 5. **A table without a primary key.** `shipment_events` has none. Logical replication (for example an upgrade to PostgreSQL 18 with almost no downtime) can't replicate updates and deletes of such a table. Goal: a primary key, or a replica identity, before you need it.
+
+6. **A frequent query without a fitting index.** One of the application's queries reads a whole table every time it runs. Find it in PMM **Query Analytics** while the workload runs (sort by load, compare rows examined with rows sent). Goal: an index built without blocking writes, and the query's time dropping in Query Analytics.
 
 **Also on the calendar:** `audit_log` has partitions for the next 3 months and no default partition. When the last one runs out, every insert fails, so creating future partitions is a recurring job.

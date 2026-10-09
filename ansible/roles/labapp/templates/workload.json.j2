@@ -1,0 +1,19 @@
+{{ {
+  'rate': labapp_workload_rate,
+  'workers': labapp_workload_workers,
+  'timeout': labapp_probe_timeout,
+  'metrics_address': '0.0.0.0',
+  'metrics_port': labapp_workload_metrics_port,
+  'control_port': labapp_workload_control_port,
+  'dsn': labapp_workload_dsn,
+  'mix': labapp_workload_mix,
+  'wave': labapp_workload_wave,
+  'flash_sale': labapp_workload_flash_sale,
+  'jobs': labapp_workload_jobs,
+  'grafana': {
+    'url': labapp_pmm_url ~ '/graph',
+    'user': labapp_pmm_user,
+    'password': labapp_pmm_password,
+    'verify_tls': false,
+  },
+} | to_nice_json }}

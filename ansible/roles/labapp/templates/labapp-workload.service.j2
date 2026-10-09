@@ -1,0 +1,20 @@
+# Managed by Ansible (role: labapp).
+[Unit]
+Description=labapp workload: the shop's application traffic, reports and batch jobs
+Wants=network-online.target
+After=network-online.target docker.service
+
+[Service]
+User={{ labapp_user }}
+Group={{ labapp_user }}
+Environment=PYTHONUNBUFFERED=1
+ExecStart={{ labapp_dir }}/venv/bin/python {{ labapp_dir }}/labapp.py workload --config /etc/labapp/workload.json
+Restart=always
+RestartSec=2
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

@@ -42,6 +42,17 @@ postgresql_app_users:
     configuration:
       statement_timeout: 60s
       work_mem: 32MB
+  - name: shop_analytics # long-running read-only reports and exports (up to minutes)
+    password: "{{ postgresql_shop_analytics_password }}"
+    conn_limit: 5
+    configuration:
+      statement_timeout: 15min
+      work_mem: 64MB
+  - name: shop_batch # scheduled batch jobs: stock recount, cart cleanup, restock
+    password: "{{ postgresql_shop_batch_password }}"
+    conn_limit: 5
+    configuration:
+      statement_timeout: 10min
 postgresql_memberships:
   - groups: [shop_owner]
     target_roles: [shop_migrator]
@@ -58,5 +69,5 @@ postgresql_pmm_server_address: "{{ hostvars[groups['pmm_server'][0]]['private_ip
 postgresql_hba_rules:
   - { database: bench, user: bench, address: "{{ postgresql_pmm_server_address }}" }
   - { database: labapp, user: labapp, address: "{{ postgresql_pmm_server_address }}" }
-  - { database: shop, user: "shop_app,shop_reporting,shop_migrator", address: "{{ postgresql_pmm_server_address }}" }
+  - { database: shop, user: "shop_app,shop_reporting,shop_analytics,shop_batch,shop_migrator", address: "{{ postgresql_pmm_server_address }}" }
   - { database: all, user: dba, address: "{{ postgresql_pmm_server_address }}" }
