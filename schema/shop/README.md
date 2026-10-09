@@ -25,6 +25,8 @@ Liquibase's own tables are pinned to the `public` schema (`liquibase-schema-name
 
 Grants come from default privileges (`0001-schema-and-access.sql`), so new tables get them automatically. Only these roles (and `pmm`) can connect to the `shop` database, only from the PMM server.
 
+Every other session, DBAs included, has the server-wide `lock_timeout` of 5 s (`conf.d/01-lab.conf`): a session that waits longer for a lock gives up instead of queueing, so others don't pile up behind it. For long maintenance, `SET lock_timeout = 0` in your session.
+
 ## Tables
 
 | Area | Tables | Notes |

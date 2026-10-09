@@ -21,6 +21,16 @@ work_mem = {{ postgresql_work_mem_mb }}MB
 maintenance_work_mem = {{ postgresql_maintenance_work_mem_mb }}MB
 
 #------------------------------------------------------------------------------
+# Locks
+#------------------------------------------------------------------------------
+# Production safety net: a session that waits longer than this for a lock (table or row) gives up with
+# "canceling statement due to lock timeout" instead of queueing, so sessions don't pile up behind it.
+# Applies to everyone, DBAs included: for long maintenance, SET lock_timeout = 0 in your session.
+# Per-role settings override it (shop_app: 2s). Autovacuum is not affected.
+lock_timeout = {{ postgresql_lock_timeout }}
+deadlock_timeout = 1s                   # check for deadlocks after 1 s of waiting; log_lock_waits logs waits from then on
+
+#------------------------------------------------------------------------------
 # WAL and checkpoints
 #------------------------------------------------------------------------------
 wal_level = replica                     # enough for streaming replicas and pgBackRest

@@ -24,6 +24,10 @@ postgresql_effective_cache_size_mb: "{{ (postgresql_memory_mb | int * 0.70) | in
 postgresql_work_mem_mb: "{{ [4, (postgresql_memory_mb | int * 0.25 / postgresql_max_connections | int) | int] | max }}"
 postgresql_maintenance_work_mem_mb: "{{ [64, [1024, (postgresql_memory_mb | int * 0.05) | int] | min] | max }}"
 
+# Global lock wait limit for every session, DBAs included (per-role settings override it, e.g. shop_app 2s):
+# a session waiting longer for a lock gives up instead of queueing, so sessions don't pile up behind it.
+postgresql_lock_timeout: 5s
+
 # Extra settings written at the end of conf.d/01-lab.conf (they win over everything above). Example:
 #   postgresql_settings_extra: { jit: false, log_min_duration_statement: 100ms }
 postgresql_settings_extra: {}
