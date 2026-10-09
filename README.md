@@ -28,6 +28,7 @@ modules/              Shared Terraform modules, used by every lab
   s3_for_backups/     (placeholder)
 ansible/roles/        Shared Ansible roles, used by every lab (how it works: ansible/README.md)
   common/             Hostname, /etc/hosts, EPEL, admin tools
+  data_volume/        Formats and mounts a database server's EBS data volume
   percona_release/    Percona repository tool
   pmm_server/         PMM 3 in Docker, admin password
   pmm_client/         PMM client, registration, monitored services

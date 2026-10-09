@@ -70,7 +70,7 @@ variable "volume_size" {
 variable "volume_type" {
   description = "EBS Volume Type"
   type        = string
-  default     = "gp2"
+  default     = "gp3"
 }
 
 variable "pmm_tag_name" {

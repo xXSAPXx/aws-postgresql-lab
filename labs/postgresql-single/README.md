@@ -5,12 +5,12 @@ A single Percona PostgreSQL 17 server in a private subnet, monitored by PMM 3. U
 ## What it deploys
 
 - **VPC** `10.0.0.0/24`: one public subnet, two private subnets in two availability zones, and a NAT gateway.
-- **postgresql-source**: Percona PostgreSQL 17 with pg_stat_monitor, in private subnet 1. Reachable only from inside the VPC.
+- **postgresql-source**: Percona PostgreSQL 17 with pg_stat_monitor and data checksums, in private subnet 1. Its data lives on a separate encrypted gp3 volume (20 GB by default, mounted at `/var/lib/pgsql`). The configuration is sized from the server's RAM and CPUs (`conf.d/01-lab.conf`, every setting commented), and `pg_hba.conf` lets each user reach only its own database, only from the PMM server.
 - **pmm-server**: PMM 3 (Docker) in the public subnet, also the SSH jump host and the application side: the labapp probe and the load tools (psql, pgbench). SSH and the PMM UI accept connections only from your `admin_cidr`.
 
 Both servers run Rocky Linux 10 (the newest official image at deploy time): PostgreSQL on a t3.small, the PMM server on a t3.medium because it also generates the load. Change them with `postgresql_instance_type` and `pmm_instance_type` in `terraform.tfvars`; Rocky Linux 10 needs a current type such as t3 or m7i, not t2. For load tests, use a non-burstable type for PostgreSQL such as `m7i.large`: t3 instances are throttled once their CPU credits run out, which looks like a slow database in PMM.
 
-**Cost:** about $0.12 per hour in us-east-1 while the lab runs (NAT gateway $0.045, t3.medium $0.042, t3.small $0.021, two public IPs $0.010, disks $0.003). Always run `terraform destroy` when you're done.
+**Cost:** about $0.12 per hour in us-east-1 while the lab runs (NAT gateway $0.045, t3.medium $0.042, t3.small $0.021, two public IPs $0.010, 40 GB of gp3 disks $0.004). Always run `terraform destroy` when you're done.
 
 Terraform (`terraform/`) builds the infrastructure. Ansible (`ansible/`) installs and configures everything on the servers; [how the Ansible part works](../../ansible/README.md).
 
@@ -22,6 +22,10 @@ Run all commands from a Linux or macOS shell. On Windows, use Ubuntu on WSL (see
 2. Add this line at the top of `~/.ssh/config`:
    ```
    Include aws-postgresql-lab.conf
+   ```
+3. Install the Ansible collections the lab needs (once, and after they change):
+   ```bash
+   ansible-galaxy collection install -r labs/postgresql-single/ansible/requirements.yml
    ```
 
 ## Deploy
@@ -45,6 +49,13 @@ ssh postgresql-source        # PostgreSQL, through the jump host
 ```
 
 The PMM server only relays the connection (ProxyJump), so your private key never leaves your machine.
+
+Database logins: on `postgresql-source`, `sudo -u postgres psql`; over the network from the PMM server, your admin user `dba` (password in `~/.pgpass`, also in `ansible/credentials/postgresql_dba_password`):
+
+```bash
+ssh pmm-server
+psql -h postgresql-source -U dba postgres
+```
 
 PMM UI: the `pmm_url` from `terraform output`. Log in as `admin` with the password from `ansible/credentials/pmm_admin_password`.
 

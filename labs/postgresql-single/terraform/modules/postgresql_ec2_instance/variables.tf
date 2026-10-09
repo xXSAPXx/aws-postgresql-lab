@@ -57,15 +57,33 @@ variable "key_name" {
 #}
 
 variable "volume_size" {
-  description = "EBS Volume GBs Size"
+  description = "Root (OS) EBS Volume GBs Size"
   type        = number
   default     = 10
 }
 
 variable "volume_type" {
-  description = "EBS Volume Type"
+  description = "Root (OS) EBS Volume Type"
   type        = string
-  default     = "gp2"
+  default     = "gp3"
+}
+
+variable "data_volume_size" {
+  description = "Data EBS volume size in GB (PostgreSQL data, mounted at /var/lib/pgsql)"
+  type        = number
+  default     = 20
+}
+
+variable "data_volume_iops" {
+  description = "Data volume IOPS (gp3: 3000 included in the price)"
+  type        = number
+  default     = 3000
+}
+
+variable "data_volume_throughput" {
+  description = "Data volume throughput in MB/s (gp3: 125 included in the price)"
+  type        = number
+  default     = 125
 }
 
 variable "postgresql_tag_name" {

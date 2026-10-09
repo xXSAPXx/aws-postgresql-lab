@@ -1,4 +1,7 @@
 ---
+# PostgreSQL data on its own EBS volume (Terraform creates it, the data_volume role mounts it):
+data_volume_mount_point: /var/lib/pgsql
+
 # PMM monitors PostgreSQL through pg_stat_monitor (installed by the postgresql role).
 pmm_client_services:
   - type: postgresql
@@ -7,14 +10,25 @@ pmm_client_services:
     password: "{{ postgresql_monitoring_password }}"
     extra_args: --query-source=pgstatmonitor --auto-discovery-limit=10
 
-# Users and databases of the applications on the PMM server: pgbench, and labapp (the probe).
+# Users and databases. The applications run on the PMM server: pgbench, labapp (the probe).
+# dba: your admin login over the network (psql -h postgresql-source -U dba postgres, from the PMM server).
 postgresql_app_users:
   - name: bench
     password: "{{ postgresql_bench_password }}"
   - name: labapp
     password: "{{ postgresql_labapp_password }}"
+  - name: dba
+    password: "{{ postgresql_dba_password }}"
+    role_attr_flags: LOGIN,SUPERUSER
 postgresql_app_databases:
   - name: bench
     owner: bench
   - name: labapp
     owner: labapp
+
+# pg_hba.conf: each user only to its own database, only from the PMM server (the application side).
+postgresql_pmm_server_address: "{{ hostvars[groups['pmm_server'][0]]['private_ip'] }}/32"
+postgresql_hba_rules:
+  - { database: bench, user: bench, address: "{{ postgresql_pmm_server_address }}" }
+  - { database: labapp, user: labapp, address: "{{ postgresql_pmm_server_address }}" }
+  - { database: all, user: dba, address: "{{ postgresql_pmm_server_address }}" }

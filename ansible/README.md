@@ -14,7 +14,7 @@ Each lab has one playbook, `labs/<lab>/ansible/site.yml`. It says which roles to
   roles: [pmm_server]
 
 - hosts: postgresql          # 3. the PostgreSQL server
-  roles: [postgresql, postgresql_tools, pmm_client]
+  roles: [data_volume, postgresql, postgresql_tools, pmm_client]
 
 - hosts: pmm_server          # 4. the PMM server again, as the application side
   roles: [postgresql_client, labapp]
@@ -40,6 +40,7 @@ A **role** is a folder of related steps, like one chapter of a runbook. Ansible 
 | Role | Lives in | What it does |
 |---|---|---|
 | `common` | `ansible/roles/` | Hostname, `/etc/hosts` entries for every lab server, EPEL, admin tools |
+| `data_volume` | `ansible/roles/` | Formats and mounts the database server's EBS data volume (before the database is installed) |
 | `percona_release` | `ansible/roles/` | Installs `percona-release`, which manages the Percona repositories |
 | `pmm_server` | `ansible/roles/` | Docker, the PMM 3 container, the PMM admin password |
 | `pmm_client` | `ansible/roles/` | PMM client, registers the server with PMM, adds the databases to monitor |

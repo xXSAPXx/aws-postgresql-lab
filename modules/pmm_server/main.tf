@@ -75,6 +75,7 @@ resource "aws_instance" "pmm_server" {
   root_block_device {
     volume_size = var.volume_size
     volume_type = var.volume_type
+    encrypted   = true
   }
 
   tags = {

@@ -1,6 +1,91 @@
 # Managed by Ansible (role: postgresql). Re-running the playbook overwrites manual changes.
 # ALTER SYSTEM (postgresql.auto.conf) still overrides these settings.
-{% for name, value in postgresql_settings.items() %}
+# Sized for this server: {{ postgresql_memory_mb }} MB RAM, {{ postgresql_vcpus }} vCPUs.
+
+#------------------------------------------------------------------------------
+# Connections
+#------------------------------------------------------------------------------
+listen_addresses = '*'
+max_connections = {{ postgresql_max_connections }}
+
+#------------------------------------------------------------------------------
+# Memory
+#------------------------------------------------------------------------------
+# PostgreSQL's own cache, ~25% of RAM: the OS page cache holds the rest.
+shared_buffers = {{ postgresql_shared_buffers_mb }}MB
+# Planner hint, nothing is allocated: memory available for caching data (shared_buffers + OS cache), ~70% of RAM.
+effective_cache_size = {{ postgresql_effective_cache_size_mb }}MB
+# Per sort / hash step of a query, several per query, times the connections: small for OLTP.
+work_mem = {{ postgresql_work_mem_mb }}MB
+# VACUUM, CREATE INDEX, ADD FOREIGN KEY: ~5% of RAM, 64 MB to 1 GB.
+maintenance_work_mem = {{ postgresql_maintenance_work_mem_mb }}MB
+
+#------------------------------------------------------------------------------
+# WAL and checkpoints
+#------------------------------------------------------------------------------
+wal_level = replica                     # enough for streaming replicas and pgBackRest
+wal_compression = lz4                   # smaller full-page images in WAL, cheap on CPU
+max_wal_size = 2GB                      # so checkpoints are driven by time, not WAL volume
+min_wal_size = 512MB
+checkpoint_timeout = 15min
+checkpoint_completion_target = 0.9      # spread checkpoint writes over 90% of the interval
+# archive_mode stays off until pgBackRest is set up: an archive_command that never succeeds fills pg_wal.
+
+#------------------------------------------------------------------------------
+# Replication (ready for replicas)
+#------------------------------------------------------------------------------
+max_wal_senders = 10
+max_replication_slots = 10
+hot_standby = on
+
+#------------------------------------------------------------------------------
+# Storage: EBS gp3 is SSD-backed
+#------------------------------------------------------------------------------
+random_page_cost = 1.1                  # random reads cost about as much as sequential ones on SSD
+effective_io_concurrency = 200          # parallel prefetch for bitmap heap scans
+maintenance_io_concurrency = 100
+
+#------------------------------------------------------------------------------
+# Parallel query
+#------------------------------------------------------------------------------
+max_worker_processes = {{ [8, postgresql_vcpus | int] | max }}
+max_parallel_workers = {{ postgresql_vcpus }}
+max_parallel_workers_per_gather = {{ [1, postgresql_vcpus | int // 2] | max }}
+max_parallel_maintenance_workers = {{ [1, postgresql_vcpus | int // 2] | max }}
+
+#------------------------------------------------------------------------------
+# Autovacuum
+#------------------------------------------------------------------------------
+autovacuum_max_workers = 3
+autovacuum_naptime = 30s
+autovacuum_vacuum_cost_limit = 2000     # the default (200) is tuned for spinning disks
+log_autovacuum_min_duration = 10s       # log autovacuum runs that take longer
+
+#------------------------------------------------------------------------------
+# Logging and observability
+#------------------------------------------------------------------------------
+log_line_prefix = '%m [%p] %q%u@%d app=%a client=%h '
+log_min_duration_statement = 500ms      # slow statements
+log_checkpoints = on
+log_lock_waits = on                     # waits longer than deadlock_timeout (1 s)
+log_temp_files = 0                      # every query that spills to disk
+log_statement = 'ddl'                   # every schema change, e.g. migrations
+track_io_timing = on                    # I/O time in EXPLAIN (ANALYZE, BUFFERS), statistics views, PMM
+track_wal_io_timing = on
+
+#------------------------------------------------------------------------------
+# Extensions
+#------------------------------------------------------------------------------
+shared_preload_libraries = 'pg_stat_monitor'
+pg_stat_monitor.pgsm_query_max_len = 2048
+pg_stat_monitor.pgsm_normalized_query = on
+pg_stat_monitor.pgsm_enable_query_plan = off    # on adds query plans to PMM QAN, with some overhead
+{% if postgresql_settings_extra %}
+
+#------------------------------------------------------------------------------
+# Lab overrides (postgresql_settings_extra): they win over the values above.
+#------------------------------------------------------------------------------
+{% for name, value in postgresql_settings_extra.items() %}
 {% if value is boolean %}
 {{ name }} = {{ value | ternary('on', 'off') }}
 {% elif value is number %}
@@ -9,3 +94,4 @@
 {{ name }} = '{{ value }}'
 {% endif %}
 {% endfor %}
+{% endif %}

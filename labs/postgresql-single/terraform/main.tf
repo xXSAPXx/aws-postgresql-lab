@@ -74,9 +74,10 @@ module "postgresql_ec2_instance" {
   #iam_instance_profile   = module.iam_roles............
   postgresql_tag_name = "postgresql-source"
 
-  # EBS Volume Settings:
-  volume_size = 10
-  volume_type = "gp2"
+  # EBS Volume Settings (root = OS; data = PostgreSQL, mounted at /var/lib/pgsql):
+  volume_size      = 10
+  volume_type      = "gp3"
+  data_volume_size = var.postgresql_data_volume_size
 }
 
 
@@ -102,5 +103,5 @@ module "pmm_server" {
 
   # EBS Volume Settings:
   volume_size = 10
-  volume_type = "gp2"
+  volume_type = "gp3"
 }

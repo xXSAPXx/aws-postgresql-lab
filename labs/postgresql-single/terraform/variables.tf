@@ -40,6 +40,12 @@ variable "pmm_instance_type" {
   }
 }
 
+variable "postgresql_data_volume_size" {
+  type        = number
+  default     = 20
+  description = "Size in GB of the PostgreSQL data volume (gp3, mounted at /var/lib/pgsql). Can be grown in place later."
+}
+
 variable "ssh_private_key_path" {
   type        = string
   default     = null

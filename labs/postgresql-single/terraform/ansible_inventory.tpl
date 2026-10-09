@@ -5,7 +5,7 @@
 pmm-server private_ip=${pmm_server_private_ip}
 
 [postgresql]
-postgresql-source private_ip=${postgresql_internal_ip}
+postgresql-source private_ip=${postgresql_internal_ip} data_volume_id=${postgresql_data_volume_id}
 
 [all:vars]
 ansible_user=${ssh_user}

@@ -9,6 +9,9 @@ postgresql_client_pgpass:
   - hosts: "{{ groups['postgresql'] + (groups['postgresql'] | map('extract', hostvars, 'private_ip') | list) }}"
     user: labapp
     password: "{{ postgresql_labapp_password }}"
+  - hosts: "{{ groups['postgresql'] + (groups['postgresql'] | map('extract', hostvars, 'private_ip') | list) }}"
+    user: dba
+    password: "{{ postgresql_dba_password }}"
 
 # labapp probe: measures availability and latency of the database, as the application sees it.
 labapp_targets:

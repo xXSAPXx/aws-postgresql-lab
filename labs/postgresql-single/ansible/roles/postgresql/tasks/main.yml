@@ -18,10 +18,12 @@
     name: "{{ postgresql_packages }}"
     state: present
 
-- name: Initialize the database cluster
+- name: Initialize the database cluster (with data checksums)
   ansible.builtin.command: "{{ postgresql_bin_dir }}/postgresql-{{ postgresql_version }}-setup initdb"
   args:
     creates: "{{ postgresql_data_dir }}/PG_VERSION"
+  environment:
+    PGSETUP_INITDB_OPTIONS: "{{ postgresql_initdb_options }}"
 
 
 ##################################################################
@@ -82,21 +84,31 @@
   become: true
   become_user: postgres
 
-- name: Create the PMM monitoring user
+- name: Create the PMM monitoring user (no superuser)
   community.postgresql.postgresql_user:
     name: "{{ postgresql_monitoring_user }}"
     password: "{{ postgresql_monitoring_password }}"
-    role_attr_flags: LOGIN,SUPERUSER
+    role_attr_flags: LOGIN,NOSUPERUSER
     login_db: postgres
   become: true
   become_user: postgres
   no_log: true
 
-- name: Create the application users
+- name: Let the PMM user read all statistics (pg_monitor)
+  community.postgresql.postgresql_membership:
+    memberships:
+      - groups: [pg_monitor]
+        target_roles: ["{{ postgresql_monitoring_user }}"]
+    granted_by_any: true
+    login_db: postgres
+  become: true
+  become_user: postgres
+
+- name: Create the application and admin users
   community.postgresql.postgresql_user:
     name: "{{ item.name }}"
     password: "{{ item.password }}"
-    role_attr_flags: LOGIN
+    role_attr_flags: "{{ item.role_attr_flags | default('LOGIN') }}"
     login_db: postgres
   loop: "{{ postgresql_app_users }}"
   become: true

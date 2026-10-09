@@ -1,0 +1,31 @@
+---
+- name: Check that the lab set the volume and mount point
+  ansible.builtin.assert:
+    that:
+      - data_volume_id | length > 0
+      - data_volume_mount_point | length > 0
+    fail_msg: data_volume_id (inventory) and data_volume_mount_point (group_vars) must be set.
+    quiet: true
+
+- name: Wait for the data volume to appear
+  ansible.builtin.wait_for:
+    path: "{{ data_volume_device }}"
+    timeout: 120
+
+- name: Create the filesystem (only on an empty volume)
+  community.general.filesystem:
+    dev: "{{ data_volume_device }}"
+    fstype: "{{ data_volume_fstype }}"
+
+- name: Mount the data volume (also added to /etc/fstab)
+  ansible.posix.mount:
+    path: "{{ data_volume_mount_point }}"
+    src: "{{ data_volume_device }}"
+    fstype: "{{ data_volume_fstype }}"
+    opts: "{{ data_volume_mount_options }}"
+    state: mounted
+  notify: Restore the SELinux labels of the mount point
+
+# Before the next roles install the database onto the volume.
+- name: Label a newly mounted volume now
+  ansible.builtin.meta: flush_handlers
