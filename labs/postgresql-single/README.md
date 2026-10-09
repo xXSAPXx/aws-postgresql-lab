@@ -61,12 +61,16 @@ psql -h postgresql-source -U bench bench                           # SQL shell a
 
 Watch the effect in PMM: **Dashboards → PostgreSQL → PostgreSQL Instance Summary**, and **Query Analytics**.
 
-For a live view on the database server itself, use [pg_activity](https://github.com/dalibo/pg_activity) (sessions, running queries, waits, locks, per-process CPU / memory / IO):
+For a live view on the database server itself, two tools are installed. Run them as the `postgres` OS user:
 
 ```bash
 ssh postgresql-source
-sudo -iu postgres pg_activity
+sudo -iu postgres pg_activity    # overview
+sudo -iu postgres pg_top         # drill down into one PID
 ```
+
+- **[pg_activity](https://github.com/dalibo/pg_activity)**: all sessions with their queries, waits and per-process CPU / memory / IO. `F1` / `F2` / `F3` show running / waiting / blocking queries; select a process with the arrow keys and press `C` to cancel or `K` to terminate it. `h` lists all keys.
+- **[pg_top](https://pg_top.gitlab.io/)**: press a key, then enter a PID. `Q` shows its full query, `E` its EXPLAIN plan, `L` the locks it holds. `A` runs EXPLAIN ANALYZE, which **executes the statement again**, so never use it on an UPDATE or DELETE.
 
 ## Break, fix, reset
 

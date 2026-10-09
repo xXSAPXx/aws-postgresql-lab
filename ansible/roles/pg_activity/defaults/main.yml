@@ -1,5 +1,0 @@
----
-# pg_activity (by Dalibo): top-like live view of PostgreSQL sessions, queries, waits and locks.
-# There is no EL10 RPM outside the PGDG repository, so it's installed from PyPI into its own virtualenv.
-pg_activity_venv: /opt/pg_activity
-pg_activity_package: "pg_activity[psycopg]"
