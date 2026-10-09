@@ -35,6 +35,7 @@
   become: true
   roles:
     - postgresql
+    - pg_activity
     - pmm_client
 
 - name: Load generator (runs on the PMM server)

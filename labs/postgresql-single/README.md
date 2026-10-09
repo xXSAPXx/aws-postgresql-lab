@@ -61,6 +61,13 @@ psql -h postgresql-source -U bench bench                           # SQL shell a
 
 Watch the effect in PMM: **Dashboards → PostgreSQL → PostgreSQL Instance Summary**, and **Query Analytics**.
 
+For a live view on the database server itself, use [pg_activity](https://github.com/dalibo/pg_activity) (sessions, running queries, waits, locks, per-process CPU / memory / IO):
+
+```bash
+ssh postgresql-source
+sudo -iu postgres pg_activity
+```
+
 ## Break, fix, reset
 
 Break whatever you like on the servers. Running `ansible-playbook site.yml` again puts everything Ansible manages back into the known-good state: packages, configuration files, the `pmm` user, services and the PMM registration. It changes only what differs. It does not restore data you deleted.

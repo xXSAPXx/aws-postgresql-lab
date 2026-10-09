@@ -1,0 +1,26 @@
+---
+- name: Install pg_activity in its own Python virtualenv
+  ansible.builtin.pip:
+    name: "{{ pg_activity_package }}"
+    virtualenv: "{{ pg_activity_venv }}"
+    virtualenv_command: python3 -m venv
+    state: present
+
+# Run it as the postgres OS user (socket login, full access to process statistics):
+#   sudo -iu postgres pg_activity
+- name: Put pg_activity on PATH
+  ansible.builtin.file:
+    src: "{{ pg_activity_venv }}/bin/pg_activity"
+    dest: /usr/local/bin/pg_activity
+    state: link
+
+# sudo -i starts with sudo's secure_path, which has no /usr/local/bin on EL.
+- name: Add /usr/local/bin to PATH in login shells that lack it
+  ansible.builtin.copy:
+    content: |
+      # Managed by Ansible (role: pg_activity). sudo -i starts without /usr/local/bin, where pg_activity is linked.
+      case ":$PATH:" in *:/usr/local/bin:*) ;; *) PATH="$PATH:/usr/local/bin" ;; esac
+    dest: /etc/profile.d/usr-local-bin.sh
+    owner: root
+    group: root
+    mode: "0644"

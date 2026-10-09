@@ -14,7 +14,7 @@ Each lab has one playbook, `labs/<lab>/ansible/site.yml`. It says which roles to
   roles: [pmm_server]
 
 - hosts: postgresql          # 3. the PostgreSQL server
-  roles: [postgresql, pmm_client]
+  roles: [postgresql, pg_activity, pmm_client]
 
 - hosts: pmm_server          # 4. the PMM server again, as the load generator
   roles: [postgresql_client]
@@ -43,6 +43,7 @@ A **role** is a folder of related steps, like one chapter of a runbook. Ansible 
 | `percona_release` | `ansible/roles/` | Installs `percona-release`, which manages the Percona repositories |
 | `pmm_server` | `ansible/roles/` | Docker, the PMM 3 container, the PMM admin password |
 | `pmm_client` | `ansible/roles/` | PMM client, registers the server with PMM, adds the databases to monitor |
+| `pg_activity` | `ansible/roles/` | pg_activity: live `top`-style view of sessions, queries, waits and locks |
 | `postgresql_client` | `ansible/roles/` | psql and pgbench on the load generator, database passwords in `~/.pgpass` |
 | `postgresql` | `labs/postgresql-single/ansible/roles/` | Percona PostgreSQL 17, its configuration, pg_stat_monitor, the `pmm` monitoring user |
 
