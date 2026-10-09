@@ -1,0 +1,12 @@
+---
+postgresql_client_version: 17
+
+# Connection defaults for the login user's shell, so psql / pgbench work without arguments.
+# Set by the lab (group_vars); leave empty to only install the tools.
+postgresql_client_host: ""
+postgresql_client_database: ""
+postgresql_client_user: ""
+postgresql_client_password: ""
+
+# OS user that gets the connection defaults (~/.pgpass): the SSH login user.
+postgresql_client_os_user: "{{ ansible_user }}"

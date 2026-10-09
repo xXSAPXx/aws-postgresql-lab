@@ -25,6 +25,7 @@ resource "local_file" "ansible_inventory" {
     pmm_server_private_ip  = module.pmm_server.pmm_server_private_ip
     postgresql_internal_ip = module.postgresql_ec2_instance.postgresql_ec2_instance_internal_ip
     vpc_cidr_block         = module.vpc.vpc_cidr_block
+    ssh_user               = local.ssh_user
   })
 }
 

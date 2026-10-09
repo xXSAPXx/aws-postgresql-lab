@@ -31,8 +31,8 @@ variable "postgresql_instance_type" {
 
 variable "pmm_instance_type" {
   type        = string
-  default     = "t3.small"
-  description = "EC2 instance type of the PMM server (PMM needs at least 2 GB RAM)"
+  default     = "t3.medium"
+  description = "EC2 instance type of the PMM server, which is also the load generator (PMM alone needs at least 2 GB RAM)"
 
   validation {
     condition     = !startswith(var.pmm_instance_type, "t2.")

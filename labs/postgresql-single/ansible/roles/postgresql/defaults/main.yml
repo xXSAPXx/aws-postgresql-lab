@@ -27,5 +27,11 @@ postgresql_hba_vpc_cidr: "{{ vpc_cidr_block }}"
 postgresql_monitoring_user: pmm
 # postgresql_monitoring_password: set by the lab (group_vars), required.
 
+# Application users and databases, set by the lab (group_vars). Example:
+#   postgresql_app_users:     [{ name: bench, password: "..." }]
+#   postgresql_app_databases: [{ name: bench, owner: bench }]
+postgresql_app_users: []
+postgresql_app_databases: []
+
 # Lab convenience: the postgres OS user may use sudo without a password.
 postgresql_os_user_sudo: true

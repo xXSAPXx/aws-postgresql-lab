@@ -8,4 +8,5 @@ pmm-server private_ip=${pmm_server_private_ip}
 postgresql-source private_ip=${postgresql_internal_ip}
 
 [all:vars]
+ansible_user=${ssh_user}
 vpc_cidr_block=${vpc_cidr_block}

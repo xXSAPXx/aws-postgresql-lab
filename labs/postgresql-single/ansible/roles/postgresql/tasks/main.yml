@@ -92,6 +92,27 @@
   become_user: postgres
   no_log: true
 
+- name: Create the application users
+  community.postgresql.postgresql_user:
+    name: "{{ item.name }}"
+    password: "{{ item.password }}"
+    role_attr_flags: LOGIN
+    login_db: postgres
+  loop: "{{ postgresql_app_users }}"
+  become: true
+  become_user: postgres
+  no_log: true
+
+- name: Create the application databases
+  community.postgresql.postgresql_db:
+    name: "{{ item.name }}"
+    owner: "{{ item.owner }}"
+  loop: "{{ postgresql_app_databases }}"
+  loop_control:
+    label: "{{ item.name }}"
+  become: true
+  become_user: postgres
+
 
 ##################################################################
 # OS:

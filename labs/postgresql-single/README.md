@@ -6,11 +6,11 @@ A single Percona PostgreSQL 17 server in a private subnet, monitored by PMM 3. U
 
 - **VPC** `10.0.0.0/24`: one public subnet, two private subnets in two availability zones, and a NAT gateway.
 - **postgresql-source**: Percona PostgreSQL 17 with pg_stat_monitor, in private subnet 1. Reachable only from inside the VPC.
-- **pmm-server**: PMM 3 (Docker) in the public subnet, also the SSH jump host. SSH and the PMM UI accept connections only from your `admin_cidr`.
+- **pmm-server**: PMM 3 (Docker) in the public subnet, also the SSH jump host and the load generator (psql, pgbench). SSH and the PMM UI accept connections only from your `admin_cidr`.
 
-Both servers run Rocky Linux 10 (the newest official image at deploy time), on t3.small instances by default. Change them with `postgresql_instance_type` and `pmm_instance_type` in `terraform.tfvars`; Rocky Linux 10 needs a current type such as t3 or m7i, not t2. For load tests, use a non-burstable type such as `m7i.large`: t3 instances are throttled once their CPU credits run out, which looks like a slow database in PMM.
+Both servers run Rocky Linux 10 (the newest official image at deploy time): PostgreSQL on a t3.small, the PMM server on a t3.medium because it also generates the load. Change them with `postgresql_instance_type` and `pmm_instance_type` in `terraform.tfvars`; Rocky Linux 10 needs a current type such as t3 or m7i, not t2. For load tests, use a non-burstable type for PostgreSQL such as `m7i.large`: t3 instances are throttled once their CPU credits run out, which looks like a slow database in PMM.
 
-**Cost:** about $0.10 per hour in us-east-1 while the lab runs (NAT gateway $0.045, two t3.small $0.042, two public IPs $0.010, disks $0.003). Always run `terraform destroy` when you're done.
+**Cost:** about $0.12 per hour in us-east-1 while the lab runs (NAT gateway $0.045, t3.medium $0.042, t3.small $0.021, two public IPs $0.010, disks $0.003). Always run `terraform destroy` when you're done.
 
 Terraform (`terraform/`) builds the infrastructure. Ansible (`ansible/`) installs and configures everything on the servers; [how the Ansible part works](../../ansible/README.md).
 
@@ -47,6 +47,19 @@ ssh postgresql-source        # PostgreSQL, through the jump host
 The PMM server only relays the connection (ProxyJump), so your private key never leaves your machine.
 
 PMM UI: the `pmm_url` from `terraform output`. Log in as `admin` with the password from `ansible/credentials/pmm_admin_password`.
+
+## Generate load
+
+The PMM server acts as the application: it sends load to PostgreSQL over the network, like an application server would. `psql` and `pgbench` on it connect to the `bench` database on `postgresql-source` without any arguments:
+
+```bash
+ssh pmm-server
+pgbench -i -s 20                 # create ~300 MB of test data (once)
+pgbench -c 8 -j 2 -T 300 -P 10   # 8 clients for 5 minutes, progress every 10 s
+psql                             # SQL shell as the bench user
+```
+
+Watch the effect in PMM: **Dashboards → PostgreSQL → PostgreSQL Instance Summary**, and **Query Analytics**.
 
 ## Break, fix, reset
 

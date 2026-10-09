@@ -1,0 +1,28 @@
+---
+- name: Enable the Percona Distribution for PostgreSQL repository
+  ansible.builtin.command: percona-release setup ppg{{ postgresql_client_version }}
+  args:
+    creates: /usr/pgsql-{{ postgresql_client_version }}/bin/psql
+
+- name: Install the PostgreSQL client tools (psql, pgbench)
+  ansible.builtin.dnf:
+    name: percona-postgresql{{ postgresql_client_version }}
+    state: present
+
+- name: Put the tools on PATH and set the connection defaults
+  ansible.builtin.template:
+    src: lab-postgresql.sh.j2
+    dest: /etc/profile.d/lab-postgresql.sh
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Store the password for the connection defaults (~/.pgpass)
+  ansible.builtin.copy:
+    content: "{{ postgresql_client_host }}:5432:*:{{ postgresql_client_user }}:{{ postgresql_client_password }}\n"
+    dest: "~{{ postgresql_client_os_user }}/.pgpass"
+    owner: "{{ postgresql_client_os_user }}"
+    group: "{{ postgresql_client_os_user }}"
+    mode: "0600"
+  when: postgresql_client_password | length > 0
+  no_log: true

@@ -1,0 +1,6 @@
+---
+# The PMM server is also the load generator: psql / pgbench connect to the lab database by default.
+postgresql_client_host: "{{ groups['postgresql'][0] }}"
+postgresql_client_database: bench
+postgresql_client_user: bench
+postgresql_client_password: "{{ postgresql_bench_password }}"

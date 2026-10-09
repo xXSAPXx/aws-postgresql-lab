@@ -1,0 +1,9 @@
+# Managed by Ansible (role: postgresql_client).
+export PATH="/usr/pgsql-{{ postgresql_client_version }}/bin:$PATH"
+{% if postgresql_client_host %}
+
+# Lab database defaults: psql / pgbench connect here without arguments (password in ~/.pgpass).
+export PGHOST={{ postgresql_client_host }}
+export PGDATABASE={{ postgresql_client_database }}
+export PGUSER={{ postgresql_client_user }}
+{% endif %}
