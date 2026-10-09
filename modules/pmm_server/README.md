@@ -31,8 +31,8 @@ Without that config, load the key into ssh-agent first. With `-J`, a `-i` on the
 ```bash
 eval "$(ssh-agent -s)" && ssh-add ~/.ssh/<your-key>
 
-ssh ec2-user@<pmm_server_public_ip>                                 # PMM server
-ssh -J ec2-user@<pmm_server_public_ip> ec2-user@<private_ip>        # private server, through the PMM server
+ssh rocky@<pmm_server_public_ip>                                    # PMM server (Rocky Linux user)
+ssh -J rocky@<pmm_server_public_ip> rocky@<private_ip>              # private server, through the PMM server
 ```
 
 Don't use `ssh -A` (agent forwarding): while you're connected, anyone with root on the PMM server could use your agent to log in with your key.

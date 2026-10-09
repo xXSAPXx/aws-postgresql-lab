@@ -1,0 +1,14 @@
+---
+postgresql_client_version: 17
+
+# Passwords written to ~/.pgpass, so psql / pgbench don't prompt. You still name the server,
+# user and database on the command line. Set by the lab (group_vars). Example:
+#   - hosts: [postgresql-source, 10.0.0.40]
+#     user: bench
+#     password: "..."
+postgresql_client_pgpass: []
+
+# OS users that get the ~/.pgpass file: the SSH login user and root.
+postgresql_client_os_users:
+  - "{{ ansible_user }}"
+  - root

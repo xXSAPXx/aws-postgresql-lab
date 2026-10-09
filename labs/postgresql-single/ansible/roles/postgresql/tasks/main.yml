@@ -3,9 +3,10 @@
 # Percona Distribution for PostgreSQL installation:
 ##################################################################
 
-- name: Disable the RHEL PostgreSQL module (Percona packages are used instead)
+- name: Disable the distribution's PostgreSQL module (Percona packages are used instead)
   ansible.builtin.command: dnf -y module disable postgresql
   changed_when: false
+  when: ansible_facts['distribution_major_version'] | int < 10 # EL10 has no dnf modules
 
 - name: Enable the Percona Distribution for PostgreSQL repository
   ansible.builtin.command: percona-release setup ppg{{ postgresql_version }}
@@ -17,10 +18,12 @@
     name: "{{ postgresql_packages }}"
     state: present
 
-- name: Initialize the database cluster
+- name: Initialize the database cluster (with data checksums)
   ansible.builtin.command: "{{ postgresql_bin_dir }}/postgresql-{{ postgresql_version }}-setup initdb"
   args:
     creates: "{{ postgresql_data_dir }}/PG_VERSION"
+  environment:
+    PGSETUP_INITDB_OPTIONS: "{{ postgresql_initdb_options }}"
 
 
 ##################################################################
@@ -81,15 +84,57 @@
   become: true
   become_user: postgres
 
-- name: Create the PMM monitoring user
+- name: Create the PMM monitoring user (no superuser)
   community.postgresql.postgresql_user:
     name: "{{ postgresql_monitoring_user }}"
     password: "{{ postgresql_monitoring_password }}"
-    role_attr_flags: LOGIN,SUPERUSER
+    role_attr_flags: LOGIN,NOSUPERUSER
     login_db: postgres
   become: true
   become_user: postgres
   no_log: true
+
+- name: Let the PMM user read all statistics (pg_monitor)
+  community.postgresql.postgresql_membership:
+    memberships:
+      - groups: [pg_monitor]
+        target_roles: ["{{ postgresql_monitoring_user }}"]
+    granted_by_any: true
+    login_db: postgres
+  become: true
+  become_user: postgres
+
+- name: Create the application and admin users (with their per-role settings)
+  community.postgresql.postgresql_user:
+    name: "{{ item.name }}"
+    password: "{{ item.password | default(omit) }}"
+    role_attr_flags: "{{ item.role_attr_flags | default('LOGIN') }}"
+    conn_limit: "{{ item.conn_limit | default(omit) }}"
+    configuration: "{{ item.configuration | default(omit) }}"
+    login_db: postgres
+  loop: "{{ postgresql_app_users }}"
+  become: true
+  become_user: postgres
+  no_log: true
+
+- name: Grant role memberships
+  community.postgresql.postgresql_membership:
+    memberships: "{{ postgresql_memberships }}"
+    granted_by_any: true
+    login_db: postgres
+  become: true
+  become_user: postgres
+  when: postgresql_memberships | length > 0
+
+- name: Create the application databases
+  community.postgresql.postgresql_db:
+    name: "{{ item.name }}"
+    owner: "{{ item.owner }}"
+  loop: "{{ postgresql_app_databases }}"
+  loop_control:
+    label: "{{ item.name }}"
+  become: true
+  become_user: postgres
 
 
 ##################################################################

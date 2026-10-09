@@ -1,0 +1,6 @@
+# Managed by Ansible (role: postgresql_client). Format: host:port:database:user:password
+{% for entry in postgresql_client_pgpass %}
+{% for host in entry.hosts %}
+{{ host }}:5432:*:{{ entry.user }}:{{ entry.password }}
+{% endfor %}
+{% endfor %}

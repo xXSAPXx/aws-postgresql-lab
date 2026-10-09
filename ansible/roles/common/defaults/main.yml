@@ -7,6 +7,6 @@ common_packages:
   - btop
   - curl
   - git
-  - iotop
+  - "{{ 'iotop-c' if ansible_facts['distribution_major_version'] | int >= 10 else 'iotop' }}" # iotop became iotop-c in EL10
   - telnet
   - vim

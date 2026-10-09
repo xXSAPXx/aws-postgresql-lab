@@ -1,6 +1,8 @@
 ---
-# Collections used by this lab. Already included in the full `ansible` package;
-# with only ansible-core installed, run: ansible-galaxy collection install -r requirements.yml
+# Collections used by this lab. Install / update them once (the full `ansible` package may bundle older ones):
+#   ansible-galaxy collection install -r requirements.yml
 collections:
+  - name: ansible.posix
+  - name: community.general
   - name: community.postgresql
-    version: ">=4.0.0"
+    version: ">=5.0.0"

@@ -34,5 +34,15 @@
   hosts: postgresql
   become: true
   roles:
+    - data_volume # before PostgreSQL is installed: its files go to the data disk
     - postgresql
+    - postgresql_tools
     - pmm_client
+
+- name: Application side (runs on the PMM server)
+  hosts: pmm_server
+  become: true
+  roles:
+    - postgresql_client
+    - liquibase # applies schema/shop migrations (and generates the data on the first run)
+    - labapp

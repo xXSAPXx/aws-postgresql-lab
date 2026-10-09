@@ -1,0 +1,10 @@
+#!/bin/sh
+# Managed by Ansible (role: liquibase). Liquibase for the {{ liquibase_project.name }} database, e.g.:
+#   liquibase-{{ liquibase_project.name }} status --verbose     pending changesets
+#   liquibase-{{ liquibase_project.name }} update-sql           the SQL that update would run, without running it
+#   liquibase-{{ liquibase_project.name }} update               apply the pending changesets
+#   liquibase-{{ liquibase_project.name }} history              what ran, and when
+#   liquibase-{{ liquibase_project.name }} rollback-count 1     undo the last changeset (its --rollback)
+export LIQUIBASE_ANALYTICS_ENABLED=false
+export LIQUIBASE_SHOW_BANNER=false
+exec {{ liquibase_dir }}/current/liquibase --defaults-file=/etc/liquibase/{{ liquibase_project.name }}.properties "$@"

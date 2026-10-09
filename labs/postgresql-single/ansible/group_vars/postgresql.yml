@@ -1,4 +1,7 @@
 ---
+# PostgreSQL data on its own EBS volume (Terraform creates it, the data_volume role mounts it):
+data_volume_mount_point: /var/lib/pgsql
+
 # PMM monitors PostgreSQL through pg_stat_monitor (installed by the postgresql role).
 pmm_client_services:
   - type: postgresql
@@ -6,3 +9,54 @@ pmm_client_services:
     username: "{{ postgresql_monitoring_user }}"
     password: "{{ postgresql_monitoring_password }}"
     extra_args: --query-source=pgstatmonitor --auto-discovery-limit=10
+
+# Users and databases. The applications run on the PMM server: pgbench, labapp, and the shop roles.
+# dba: your admin login over the network (psql -h postgresql-source -U dba postgres, from the PMM server).
+# shop_*: least privilege, like production. shop_owner owns every shop object and can't log in;
+# shop_migrator runs the Liquibase migrations and acts as shop_owner (its role setting below).
+postgresql_app_users:
+  - name: bench
+    password: "{{ postgresql_bench_password }}"
+  - name: labapp
+    password: "{{ postgresql_labapp_password }}"
+  - name: dba
+    password: "{{ postgresql_dba_password }}"
+    role_attr_flags: LOGIN,SUPERUSER
+  - name: shop_owner
+    role_attr_flags: NOLOGIN
+  - name: shop_migrator
+    password: "{{ postgresql_shop_migrator_password }}"
+    configuration:
+      role: shop_owner # objects created in migrations belong to shop_owner
+      lock_timeout: 5s # a migration that can't get its lock fails fast instead of blocking the application
+  - name: shop_app
+    password: "{{ postgresql_shop_app_password }}"
+    conn_limit: 60
+    configuration:
+      statement_timeout: 5s
+      lock_timeout: 2s
+      idle_in_transaction_session_timeout: 30s
+  - name: shop_reporting
+    password: "{{ postgresql_shop_reporting_password }}"
+    conn_limit: 10
+    configuration:
+      statement_timeout: 60s
+      work_mem: 32MB
+postgresql_memberships:
+  - groups: [shop_owner]
+    target_roles: [shop_migrator]
+postgresql_app_databases:
+  - name: bench
+    owner: bench
+  - name: labapp
+    owner: labapp
+  - name: shop
+    owner: shop_owner
+
+# pg_hba.conf: each user only to its own database, only from the PMM server (the application side).
+postgresql_pmm_server_address: "{{ hostvars[groups['pmm_server'][0]]['private_ip'] }}/32"
+postgresql_hba_rules:
+  - { database: bench, user: bench, address: "{{ postgresql_pmm_server_address }}" }
+  - { database: labapp, user: labapp, address: "{{ postgresql_pmm_server_address }}" }
+  - { database: shop, user: "shop_app,shop_reporting,shop_migrator", address: "{{ postgresql_pmm_server_address }}" }
+  - { database: all, user: dba, address: "{{ postgresql_pmm_server_address }}" }

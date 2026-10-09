@@ -63,13 +63,28 @@ resource "aws_instance" "pmm_server" {
   vpc_security_group_ids = [aws_security_group.pmm_server_sg.id]
   key_name               = var.key_name
 
+  # Burstable types (t3...): "standard" throttles when CPU credits run out instead of
+  # billing extra like AWS's default for t3 ("unlimited"). Other types don't take this setting.
+  dynamic "credit_specification" {
+    for_each = startswith(var.instance_type, "t") ? [1] : []
+    content {
+      cpu_credits = "standard"
+    }
+  }
+
   root_block_device {
     volume_size = var.volume_size
     volume_type = var.volume_type
+    encrypted   = true
   }
 
   tags = {
     Name = var.pmm_tag_name
+  }
+
+  # A newer image (e.g. from an "always the latest" AMI lookup) must not replace a running server:
+  lifecycle {
+    ignore_changes = [ami]
   }
 }
 

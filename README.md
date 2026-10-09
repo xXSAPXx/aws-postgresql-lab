@@ -28,9 +28,16 @@ modules/              Shared Terraform modules, used by every lab
   s3_for_backups/     (placeholder)
 ansible/roles/        Shared Ansible roles, used by every lab (how it works: ansible/README.md)
   common/             Hostname, /etc/hosts, EPEL, admin tools
+  data_volume/        Formats and mounts a database server's EBS data volume
   percona_release/    Percona repository tool
   pmm_server/         PMM 3 in Docker, admin password
   pmm_client/         PMM client, registration, monitored services
+  postgresql_client/  psql and pgbench on the load generator
+  postgresql_tools/   Live monitoring on the database server: pg_activity, pg_top
+  liquibase/          Applies a database's SQL migrations from the repo
+  labapp/             The simulated application: availability probe, PMM dashboard
+schema/shop/          The shop database: Liquibase migrations, data generation, exercises
+tools/labapp/         The simulated application's code (Python)
 labs/<lab>/
   terraform/          The lab's Terraform root, with its own state file
   ansible/            The lab's playbook (site.yml) and lab-specific roles

@@ -7,6 +7,30 @@
 # Shared modules live in ../../../modules, lab-specific modules in ./modules.
 
 
+# Server image: the newest official Rocky Linux 10 (free, RHEL-compatible), published by the Rocky Enterprise Software Foundation.
+# The instances ignore later image updates, so a new Rocky release never replaces the servers of a running lab.
+######################################################################################
+
+data "aws_ami" "rocky_10" {
+  most_recent = true
+  owners      = ["792107900819"]
+
+  filter {
+    name   = "name"
+    values = ["Rocky-10-EC2-Base-10.*"]
+  }
+
+  filter {
+    name   = "architecture"
+    values = ["x86_64"]
+  }
+}
+
+locals {
+  ssh_user = "rocky" # default user of the Rocky Linux images
+}
+
+
 # Networking:
 # Create VPC / Subnets / Nat_Gateway / Routing / Internet_Gateway
 ######################################################################################
@@ -43,16 +67,17 @@ module "postgresql_ec2_instance" {
   sec_group_description = "Allow SSH / PMM and PostgreSQL Ports"
 
   # --- PostgreSQL_EC2_Instance Settings ---
-  ami_id        = "ami-0583d8c7a9c35822c"
-  instance_type = "t2.small"
+  ami_id        = data.aws_ami.rocky_10.id
+  instance_type = var.postgresql_instance_type
   key_name      = var.aws_key_pair
   subnet_id     = module.vpc.private_subnet_1_id
   #iam_instance_profile   = module.iam_roles............
   postgresql_tag_name = "postgresql-source"
 
-  # EBS Volume Settings:
-  volume_size = 10
-  volume_type = "gp2"
+  # EBS Volume Settings (root = OS; data = PostgreSQL, mounted at /var/lib/pgsql):
+  volume_size      = 10
+  volume_type      = "gp3"
+  data_volume_size = var.postgresql_data_volume_size
 }
 
 
@@ -69,8 +94,8 @@ module "pmm_server" {
   sec_group_description = "Allow SSH / PMM Ports"
 
   # --- PMM_EC2_Instance Settings ---
-  ami_id        = "ami-0583d8c7a9c35822c"
-  instance_type = "t2.small"
+  ami_id        = data.aws_ami.rocky_10.id
+  instance_type = var.pmm_instance_type
   key_name      = var.aws_key_pair
   subnet_id     = module.vpc.public_subnet_1_id
   #iam_instance_profile         = module.iam_roles............
@@ -78,5 +103,5 @@ module "pmm_server" {
 
   # EBS Volume Settings:
   volume_size = 10
-  volume_type = "gp2"
+  volume_type = "gp3"
 }

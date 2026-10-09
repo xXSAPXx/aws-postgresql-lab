@@ -1,0 +1,12 @@
+---
+# Live PostgreSQL monitoring tools on the database servers:
+#   pg_activity (Dalibo): top-like overview of sessions, queries, waits and blocking; cancel / terminate.
+#   pg_top: per-PID drill-down: current query (Q), EXPLAIN plan (E), locks (L), I/O.
+
+# pg_activity has no EL10 RPM outside the PGDG repository, so it's installed from PyPI into its own virtualenv.
+postgresql_tools_pg_activity_venv: /opt/pg_activity
+postgresql_tools_pg_activity_package: "pg_activity[psycopg]"
+
+# Installed with dnf (pg_top is in EPEL):
+postgresql_tools_packages:
+  - pg_top

@@ -9,23 +9,46 @@ postgresql_packages:
   - percona-postgresql{{ postgresql_version }}-server
   - percona-pgbackrest
   - percona-pg_repack{{ postgresql_version }}
-  - percona-pg-stat-monitor{{ postgresql_version }}
+  - percona-pg_stat_monitor{{ postgresql_version }}
   - python3-psycopg2 # used by the community.postgresql modules
 
-# Written to conf.d/01-lab.conf (included at the end of postgresql.conf, so these win):
-postgresql_settings:
-  listen_addresses: "*"
-  shared_preload_libraries: pg_stat_monitor
-  pg_stat_monitor.pgsm_query_max_len: 2048
-  pg_stat_monitor.pgsm_normalized_query: true
-  pg_stat_monitor.pgsm_enable_query_plan: false # true adds query plans to PMM QAN, with some overhead
+# Options for initdb (only when the cluster is created): checksums detect pages damaged by storage.
+postgresql_initdb_options: --data-checksums
 
-# Password (scram-sha-256) logins from inside the VPC, in pg_hba.conf:
-postgresql_hba_vpc_cidr: "{{ vpc_cidr_block }}"
+# Configuration sizing (conf.d/01-lab.conf), computed from this server's RAM and vCPUs:
+postgresql_memory_mb: "{{ ansible_facts['memtotal_mb'] }}"
+postgresql_vcpus: "{{ ansible_facts['processor_vcpus'] }}"
+postgresql_max_connections: 100
+postgresql_shared_buffers_mb: "{{ (postgresql_memory_mb | int * 0.25) | int }}"
+postgresql_effective_cache_size_mb: "{{ (postgresql_memory_mb | int * 0.70) | int }}"
+postgresql_work_mem_mb: "{{ [4, (postgresql_memory_mb | int * 0.25 / postgresql_max_connections | int) | int] | max }}"
+postgresql_maintenance_work_mem_mb: "{{ [64, [1024, (postgresql_memory_mb | int * 0.05) | int] | min] | max }}"
 
-# Monitoring user for PMM:
+# Global lock wait limit for every session, DBAs included (per-role settings override it, e.g. shop_app 2s):
+# a session waiting longer for a lock gives up instead of queueing, so sessions don't pile up behind it.
+postgresql_lock_timeout: 5s
+
+# Extra settings written at the end of conf.d/01-lab.conf (they win over everything above). Example:
+#   postgresql_settings_extra: { jit: false, log_min_duration_statement: 100ms }
+postgresql_settings_extra: {}
+
+# pg_hba.conf rules after the local ones; anything not listed is rejected. Example:
+#   - { database: shop, user: shop_app, address: 10.0.0.5/32 }   (method: scram-sha-256 by default)
+postgresql_hba_rules: []
+
+# Monitoring user for PMM (pg_monitor: reads all statistics, no superuser):
 postgresql_monitoring_user: pmm
 # postgresql_monitoring_password: set by the lab (group_vars), required.
+
+# Application and admin users and databases, set by the lab (group_vars). Example:
+#   postgresql_app_users:     [{ name: bench, password: "..." }, { name: dba, password: "...", role_attr_flags: "LOGIN,SUPERUSER" }]
+#   postgresql_app_databases: [{ name: bench, owner: bench }]
+#   Optional per user: role_attr_flags (default LOGIN), conn_limit, configuration (ALTER ROLE ... SET, e.g. { statement_timeout: 5s }).
+postgresql_app_users: []
+postgresql_app_databases: []
+
+# Role memberships, e.g. [{ groups: [shop_owner], target_roles: [shop_migrator] }]
+postgresql_memberships: []
 
 # Lab convenience: the postgres OS user may use sudo without a password.
 postgresql_os_user_sudo: true

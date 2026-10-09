@@ -1,0 +1,39 @@
+---
+# The PMM server is also the load generator. ~/.pgpass holds the passwords for every server in the
+# postgresql group (by name and private IP), so replicas added to that group are covered too.
+# Name the server on the command line, e.g.: pgbench -h postgresql-source -U bench bench
+postgresql_client_pgpass:
+  - hosts: "{{ groups['postgresql'] + (groups['postgresql'] | map('extract', hostvars, 'private_ip') | list) }}"
+    user: bench
+    password: "{{ postgresql_bench_password }}"
+  - hosts: "{{ groups['postgresql'] + (groups['postgresql'] | map('extract', hostvars, 'private_ip') | list) }}"
+    user: labapp
+    password: "{{ postgresql_labapp_password }}"
+  - hosts: "{{ groups['postgresql'] + (groups['postgresql'] | map('extract', hostvars, 'private_ip') | list) }}"
+    user: dba
+    password: "{{ postgresql_dba_password }}"
+  - hosts: "{{ groups['postgresql'] + (groups['postgresql'] | map('extract', hostvars, 'private_ip') | list) }}"
+    user: shop_app
+    password: "{{ postgresql_shop_app_password }}"
+  - hosts: "{{ groups['postgresql'] + (groups['postgresql'] | map('extract', hostvars, 'private_ip') | list) }}"
+    user: shop_reporting
+    password: "{{ postgresql_shop_reporting_password }}"
+  - hosts: "{{ groups['postgresql'] + (groups['postgresql'] | map('extract', hostvars, 'private_ip') | list) }}"
+    user: shop_migrator
+    password: "{{ postgresql_shop_migrator_password }}"
+
+# Liquibase: the shop schema migrations (schema/shop in the repo), applied as shop_migrator.
+liquibase_projects:
+  - name: shop
+    changelog_dir: "{{ playbook_dir }}/../../../schema/shop"
+    url: "jdbc:postgresql://{{ groups['postgresql'][0] }}:5432/shop"
+    username: shop_migrator
+    password: "{{ postgresql_shop_migrator_password }}"
+    parameters:
+      shop_scale: "{{ shop_scale }}"
+
+# labapp probe: measures availability and latency of the database, as the application sees it.
+labapp_targets:
+  - name: "{{ groups['postgresql'][0] }}"
+    dsn: "host={{ groups['postgresql'][0] }} port=5432 dbname=labapp user=labapp password={{ postgresql_labapp_password }}"
+labapp_pmm_password: "{{ pmm_admin_password }}"

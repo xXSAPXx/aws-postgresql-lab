@@ -1,0 +1,37 @@
+---
+# Run both tools as the postgres OS user (socket login, full access to process statistics):
+#   sudo -iu postgres pg_activity
+#   sudo -iu postgres pg_top
+
+- name: Install pg_top
+  ansible.builtin.dnf:
+    name: "{{ postgresql_tools_packages }}"
+    state: present
+
+# pg_top (EPEL) is built against the system libpq, but Percona's linker config puts /usr/pgsql-*/lib first,
+# so pg_top prints "libpq.so.5: no version information available" on every start. The wrapper loads the
+# system libpq for pg_top only; everything else keeps using Percona's.
+- name: Wrap pg_top to load the system libpq
+  ansible.builtin.copy:
+    content: |
+      #!/bin/sh
+      # Managed by Ansible (role: postgresql_tools). Runs pg_top with the system libpq it was built against.
+      LD_LIBRARY_PATH=/usr/lib64${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH} exec /usr/bin/pg_top "$@"
+    dest: /usr/local/bin/pg_top
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Install pg_activity in its own Python virtualenv
+  ansible.builtin.pip:
+    name: "{{ postgresql_tools_pg_activity_package }}"
+    virtualenv: "{{ postgresql_tools_pg_activity_venv }}"
+    virtualenv_command: python3 -m venv
+    state: present
+
+# /usr/local/bin is on PATH in every login shell, also after sudo -i (role: common).
+- name: Put pg_activity on PATH
+  ansible.builtin.file:
+    src: "{{ postgresql_tools_pg_activity_venv }}/bin/pg_activity"
+    dest: /usr/local/bin/pg_activity
+    state: link

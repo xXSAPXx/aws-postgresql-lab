@@ -11,9 +11,21 @@
     group: root
     mode: "0644"
 
+# sudo -i starts with sudo's secure_path, which has no /usr/local/bin on EL. Put it first, as in a
+# normal login, so the lab's tools there (pg_activity, the pg_top wrapper, labapp) are found.
+- name: Add /usr/local/bin to PATH in login shells that lack it
+  ansible.builtin.copy:
+    content: |
+      # Managed by Ansible (role: common). sudo -i starts without /usr/local/bin, where the lab's tools are.
+      case ":$PATH:" in *:/usr/local/bin:*) ;; *) PATH="/usr/local/bin:$PATH" ;; esac
+    dest: /etc/profile.d/usr-local-bin.sh
+    owner: root
+    group: root
+    mode: "0644"
+
 - name: Install the EPEL repository
   ansible.builtin.dnf:
-    name: https://dl.fedoraproject.org/pub/epel/epel-release-latest-9.noarch.rpm
+    name: https://dl.fedoraproject.org/pub/epel/epel-release-latest-{{ ansible_facts['distribution_major_version'] }}.noarch.rpm
     state: present
     disable_gpg_check: true # bootstrap package: it installs the EPEL signing key itself
 

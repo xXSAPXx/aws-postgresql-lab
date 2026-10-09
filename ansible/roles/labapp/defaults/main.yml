@@ -1,0 +1,31 @@
+---
+# labapp: the lab's simulated application (tools/labapp). Runs on the PMM server.
+labapp_dir: /opt/labapp
+labapp_user: labapp
+labapp_source: "{{ role_path }}/../../../tools/labapp/labapp.py"
+labapp_python_packages:
+  - psycopg[binary]>=3.2
+  - prometheus_client>=0.20
+
+# Probe settings (seconds): write check, connect check, timeout for connecting / each statement.
+labapp_probe_interval: 0.25
+labapp_probe_connect_interval: 1.0
+labapp_probe_timeout: 2.0
+
+# Databases to probe, set by the lab (group_vars). Example:
+#   - name: postgresql-source
+#     dsn: "host=postgresql-source dbname=labapp user=labapp password=..."
+labapp_targets: []
+
+# Metrics for PMM: the probe listens on this port, and PMM (in its container) collects them over the
+# host's private IP.
+labapp_metrics_port: 9300
+labapp_metrics_host: "{{ private_ip }}"
+
+# The PMM server on this host: API for the metrics registration, Grafana for annotations and the dashboard.
+labapp_pmm_url: https://127.0.0.1
+labapp_pmm_container: pmm-server
+labapp_pmm_user: admin
+labapp_pmm_password: "" # set by the lab, required
+labapp_dashboard_folder_uid: lab
+labapp_dashboard_folder_title: Lab

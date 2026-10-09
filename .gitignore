@@ -28,3 +28,8 @@ credentials/
 
 
 
+
+
+##################### Python Ignore ######################
+
+__pycache__/

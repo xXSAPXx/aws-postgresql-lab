@@ -1,0 +1,373 @@
+#!/usr/bin/env python3
+"""labapp: the lab's simulated application.
+
+Commands:
+  labapp probe --config FILE          Run the availability probe (normally as the labapp-probe service).
+  labapp outages [--log FILE] [--last N]
+                                      List the outages the probe measured.
+
+The probe checks every target from the application's side:
+  write    On a persistent connection, a heartbeat row is written every `interval` seconds.
+           A failed write is downtime, also when the server still accepts reads (e.g. a demoted primary).
+  connect  Every `connect_interval` seconds, a new connection runs SELECT 1, like a reconnecting application.
+
+An outage starts at the first failed write check and ends when a write check succeeds again, so
+durations are accurate to about one `interval` (longer if the server stops answering at all, up to `timeout`).
+Metrics are served in Prometheus format for PMM, outages are appended to a JSON-lines log, and each outage
+is marked as an annotation on the PMM (Grafana) dashboards.
+
+Config (JSON):
+  {
+    "interval": 0.25, "connect_interval": 1.0, "timeout": 2.0,
+    "metrics_address": "0.0.0.0", "metrics_port": 9300,
+    "outage_log": "/var/log/labapp/outages.jsonl",
+    "targets": [{"name": "postgresql-source", "dsn": "host=... dbname=... user=... password=..."}],
+    "grafana": {"url": "https://127.0.0.1/graph", "user": "admin", "password": "...", "verify_tls": false}
+  }
+"""
+
+import argparse
+import base64
+import json
+import logging
+import signal
+import socket
+import ssl
+import sys
+import threading
+import time
+import urllib.request
+from datetime import datetime, timezone
+from queue import Queue
+
+LOG = logging.getLogger("labapp")
+DEFAULT_OUTAGE_LOG = "/var/log/labapp/outages.jsonl"
+
+# Latency buckets (seconds): 1 ms .. 5 s.
+BUCKETS = (0.001, 0.0025, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0)
+
+CREATE_SQL = """
+CREATE TABLE IF NOT EXISTS labapp_probe (
+    probe      text PRIMARY KEY,
+    seq        bigint NOT NULL,
+    updated_at timestamptz NOT NULL
+)"""
+
+WRITE_SQL = """
+INSERT INTO labapp_probe (probe, seq, updated_at) VALUES (%s, %s, now())
+ON CONFLICT (probe) DO UPDATE SET seq = EXCLUDED.seq, updated_at = EXCLUDED.updated_at
+RETURNING seq"""
+
+
+def utc(ts):
+    """Unix time -> ISO 8601 UTC with milliseconds."""
+    return datetime.fromtimestamp(ts, timezone.utc).isoformat(timespec="milliseconds")
+
+
+def short_error(exc):
+    text = str(exc).strip()
+    first_line = text.splitlines()[0] if text else ""
+    return f"{type(exc).__name__}: {first_line}"[:200]
+
+
+def connect(dsn, timeout, application_name):
+    """Connection with bounded waits: connect, every statement and dead TCP peers all fail within `timeout`."""
+    import psycopg
+
+    timeout_ms = int(timeout * 1000)
+    return psycopg.connect(
+        dsn,
+        autocommit=True,
+        application_name=application_name,
+        connect_timeout=max(2, round(timeout)),  # libpq treats values below 2 s as 2 s
+        keepalives=1,
+        keepalives_idle=5,
+        keepalives_interval=1,
+        keepalives_count=3,
+        tcp_user_timeout=timeout_ms,
+        options=f"-c statement_timeout={timeout_ms}",
+    )
+
+
+class Metrics:
+    """Prometheus metrics, scraped by PMM."""
+
+    def __init__(self):
+        from prometheus_client import Counter, Gauge, Histogram
+
+        try:
+            from prometheus_client import disable_created_metrics
+
+            disable_created_metrics()  # no extra *_created series
+        except ImportError:
+            pass
+
+        checks = ["target", "check"]
+        self.up = Gauge("labapp_probe_up", "1 if the last check succeeded, 0 if it failed", checks)
+        self.latency = Histogram(
+            "labapp_probe_latency_seconds", "Duration of successful checks", checks, buckets=BUCKETS
+        )
+        self.checks = Counter("labapp_probe_checks", "Checks run, by result", checks + ["result"])
+        self.outages = Counter("labapp_probe_outages", "Completed write outages", ["target"])
+        self.downtime = Counter("labapp_probe_downtime_seconds", "Total duration of completed write outages", ["target"])
+        self.current = Gauge(
+            "labapp_probe_current_outage_seconds", "Duration of the ongoing write outage (0 when up)", ["target"]
+        )
+        self.last = Gauge("labapp_probe_last_outage_seconds", "Duration of the last completed write outage", ["target"])
+
+    def register(self, target):
+        """Create every series at 0, so dashboards show zeros instead of 'no data' before the first outage."""
+        for check in ("write", "connect"):
+            for result in ("ok", "error"):
+                self.checks.labels(target, check, result)
+        for metric in (self.outages, self.downtime, self.current, self.last):
+            metric.labels(target)
+
+
+class Annotations:
+    """Marks outages on the PMM (Grafana) dashboards. Runs in its own thread, so it never delays a check."""
+
+    def __init__(self, cfg):
+        self.url = cfg["url"].rstrip("/") + "/api/annotations"
+        token = base64.b64encode(f'{cfg["user"]}:{cfg["password"]}'.encode()).decode()
+        self.headers = {"Authorization": f"Basic {token}", "Content-Type": "application/json"}
+        self.ssl = ssl.create_default_context()
+        if not cfg.get("verify_tls", True):
+            self.ssl.check_hostname = False
+            self.ssl.verify_mode = ssl.CERT_NONE
+        self.queue = Queue()
+        self.ids = {}  # (target, start) -> annotation id
+        threading.Thread(target=self._run, name="annotations", daemon=True).start()
+
+    def started(self, target, start, error):
+        self.queue.put(("start", target, start, None, error))
+
+    def ended(self, target, start, end, error):
+        self.queue.put(("end", target, start, end, error))
+
+    def _request(self, method, path, body):
+        request = urllib.request.Request(
+            self.url + path, data=json.dumps(body).encode(), headers=self.headers, method=method
+        )
+        with urllib.request.urlopen(request, timeout=5, context=self.ssl) as response:
+            return json.load(response)
+
+    def _run(self):
+        while True:
+            kind, target, start, end, error = self.queue.get()
+            # Tagged with the target too: PMM's dashboards show annotations tagged with their node / service name.
+            tags = ["labapp", "outage", target]
+            try:
+                if kind == "start":
+                    body = {"time": int(start * 1000), "tags": tags, "text": f"Write outage started on {target}: {error}"}
+                    self.ids[(target, start)] = self._request("POST", "", body).get("id")
+                else:
+                    body = {
+                        "time": int(start * 1000),
+                        "timeEnd": int(end * 1000),
+                        "tags": tags,
+                        "text": f"Write outage on {target}: {end - start:.1f} s ({error})",
+                    }
+                    annotation_id = self.ids.pop((target, start), None)
+                    if annotation_id:
+                        self._request("PATCH", f"/{annotation_id}", body)
+                    else:
+                        self._request("POST", "", body)
+            except Exception as exc:  # PMM down or busy: the probe keeps measuring regardless
+                LOG.warning("could not write the Grafana annotation: %s", short_error(exc))
+
+
+class Target:
+    """One database endpoint, checked by a write thread and a connect thread."""
+
+    def __init__(self, name, dsn, cfg, metrics, annotations):
+        self.name = name
+        self.dsn = dsn
+        self.interval = float(cfg.get("interval", 0.25))
+        self.connect_interval = float(cfg.get("connect_interval", 1.0))
+        self.timeout = float(cfg.get("timeout", 2.0))
+        self.outage_log = cfg.get("outage_log", DEFAULT_OUTAGE_LOG)
+        self.metrics = metrics
+        self.annotations = annotations
+        self.probe_id = f"{socket.gethostname()}/{name}"
+        self.lock = threading.Lock()
+        self.outage_start = None
+        self.outage_error = None
+        self.failed_checks = 0
+        self.last_ok = None
+        metrics.register(name)
+
+    # ---- checks ---------------------------------------------------------------------------------
+
+    def write_loop(self, stop):
+        conn, seq = None, 0
+        while not stop.is_set():
+            tick, started = time.monotonic(), time.time()
+            try:
+                if conn is None:
+                    conn = connect(self.dsn, self.timeout, "labapp-probe")
+                    conn.execute(CREATE_SQL)
+                seq += 1
+                conn.execute(WRITE_SQL, (self.probe_id, seq)).fetchone()
+                self.check_done("write", True, time.monotonic() - tick, time.time())
+            except Exception as exc:
+                self.check_done("write", False, None, started, short_error(exc))
+                if conn is not None:
+                    try:
+                        conn.close()
+                    except Exception:
+                        pass
+                    conn = None
+            stop.wait(max(0.0, self.interval - (time.monotonic() - tick)))
+
+    def connect_loop(self, stop):
+        while not stop.is_set():
+            tick, started = time.monotonic(), time.time()
+            try:
+                with connect(self.dsn, self.timeout, "labapp-probe-connect") as conn:
+                    conn.execute("SELECT 1").fetchone()
+                self.check_done("connect", True, time.monotonic() - tick, time.time())
+            except Exception as exc:
+                self.check_done("connect", False, None, started, short_error(exc))
+            stop.wait(max(0.0, self.connect_interval - (time.monotonic() - tick)))
+
+    # ---- results --------------------------------------------------------------------------------
+
+    def check_done(self, check, ok, duration, when, error=None):
+        """`when`: completion time of a successful check, start time of a failed one."""
+        self.metrics.checks.labels(self.name, check, "ok" if ok else "error").inc()
+        self.metrics.up.labels(self.name, check).set(1 if ok else 0)
+        if ok:
+            self.metrics.latency.labels(self.name, check).observe(duration)
+        elif check == "connect":
+            LOG.debug("%s: connect check failed: %s", self.name, error)
+        if check == "write":
+            self._track_outage(ok, when, error)
+
+    def _track_outage(self, ok, when, error):
+        with self.lock:
+            if not ok:
+                if self.outage_start is None:
+                    self.outage_start, self.outage_error, self.failed_checks = when, error, 0
+                    LOG.warning("%s: write outage started at %s: %s", self.name, utc(when), error)
+                    if self.annotations:
+                        self.annotations.started(self.name, when, error)
+                self.failed_checks += 1
+                self.metrics.current.labels(self.name).set(time.time() - self.outage_start)
+                return
+
+            if self.outage_start is not None:
+                duration = when - self.outage_start
+                record = {
+                    "target": self.name,
+                    "start": utc(self.outage_start),
+                    "end": utc(when),
+                    "duration_s": round(duration, 3),
+                    "last_ok": utc(self.last_ok) if self.last_ok else None,
+                    "failed_checks": self.failed_checks,
+                    "error": self.outage_error,
+                }
+                LOG.warning(
+                    "%s: write outage ended after %.3f s (%d failed checks): %s",
+                    self.name, duration, self.failed_checks, self.outage_error,
+                )
+                self._append_outage_log(record)
+                self.metrics.outages.labels(self.name).inc()
+                self.metrics.downtime.labels(self.name).inc(duration)
+                self.metrics.last.labels(self.name).set(duration)
+                if self.annotations:
+                    self.annotations.ended(self.name, self.outage_start, when, self.outage_error)
+                self.outage_start = None
+            self.last_ok = when
+            self.metrics.current.labels(self.name).set(0)
+
+    def _append_outage_log(self, record):
+        try:
+            with open(self.outage_log, "a", encoding="utf-8") as log:
+                log.write(json.dumps(record) + "\n")
+        except OSError as exc:
+            LOG.error("could not write %s: %s", self.outage_log, exc)
+
+
+# ---- commands ------------------------------------------------------------------------------------
+
+
+def cmd_probe(args):
+    from prometheus_client import start_http_server
+
+    with open(args.config, encoding="utf-8") as f:
+        cfg = json.load(f)
+
+    metrics = Metrics()
+    start_http_server(int(cfg.get("metrics_port", 9300)), addr=cfg.get("metrics_address", "0.0.0.0"))
+    annotations = Annotations(cfg["grafana"]) if cfg.get("grafana") else None
+
+    stop = threading.Event()
+    signal.signal(signal.SIGTERM, lambda *_: stop.set())
+    signal.signal(signal.SIGINT, lambda *_: stop.set())
+
+    targets = []
+    for t in cfg["targets"]:
+        target = Target(t["name"], t["dsn"], cfg, metrics, annotations)
+        targets.append(target)
+        for check, loop in (("write", target.write_loop), ("connect", target.connect_loop)):
+            threading.Thread(target=loop, args=(stop,), name=f"{t['name']}-{check}", daemon=True).start()
+        LOG.info(
+            "probing %s: write every %.2f s, connect every %.2f s, timeout %.1f s",
+            target.name, target.interval, target.connect_interval, target.timeout,
+        )
+
+    while not stop.is_set():
+        stop.wait(1)
+    for target in targets:
+        if target.outage_start is not None:
+            LOG.warning("%s: probe stopped during an outage that started at %s", target.name, utc(target.outage_start))
+    LOG.info("stopped")
+
+
+def cmd_outages(args):
+    try:
+        with open(args.log, encoding="utf-8") as f:
+            records = [json.loads(line) for line in f if line.strip()]
+    except FileNotFoundError:
+        records = []
+    if not records:
+        print("No outages measured yet.")
+        return
+
+    first = max(0, len(records) - args.last)
+    print(f"{'#':>3}  {'target':<20} {'start (UTC)':<24} {'end (UTC)':<24} {'duration':>9}  first error")
+    for number, r in enumerate(records[first:], start=first + 1):
+        print(
+            f"{number:>3}  {r['target']:<20} {r['start'][:23]:<24} {r['end'][:23]:<24} "
+            f"{r['duration_s']:>8.3f}s  {r['error']}"
+        )
+    total = sum(r["duration_s"] for r in records)
+    print(f"\n{len(records)} outages, {total:.3f} s of write downtime in total.")
+
+
+def main():
+    parser = argparse.ArgumentParser(prog="labapp", description="The lab's simulated application.")
+    sub = parser.add_subparsers(dest="command", required=True)
+
+    probe = sub.add_parser("probe", help="run the availability probe")
+    probe.add_argument("--config", required=True, help="JSON config file")
+    probe.add_argument("--debug", action="store_true", help="also log failed connect checks")
+    probe.set_defaults(func=cmd_probe)
+
+    outages = sub.add_parser("outages", help="list the outages the probe measured")
+    outages.add_argument("--log", default=DEFAULT_OUTAGE_LOG, help=f"outage log (default: {DEFAULT_OUTAGE_LOG})")
+    outages.add_argument("--last", type=int, default=20, help="show the last N outages (default: 20)")
+    outages.set_defaults(func=cmd_outages)
+
+    args = parser.parse_args()
+    logging.basicConfig(
+        level=logging.DEBUG if getattr(args, "debug", False) else logging.INFO,
+        format="%(levelname)s %(message)s",
+        stream=sys.stdout,
+    )
+    args.func(args)
+
+
+if __name__ == "__main__":
+    main()

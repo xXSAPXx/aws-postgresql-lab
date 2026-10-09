@@ -12,5 +12,9 @@ local   replication     all                                     peer
 host    replication     all             127.0.0.1/32            scram-sha-256
 host    replication     all             ::1/128                 scram-sha-256
 
-# Lab VPC (PMM server / jump host and the other lab servers): passwords.
-host    all             all             {{ postgresql_hba_vpc_cidr }}             scram-sha-256
+# Network: each user only to its own database, only from its own source.
+{% for rule in postgresql_hba_rules %}
+{{ '%-7s %-15s %-15s %-23s %s' | format('host', rule.database, rule.user, rule.address, rule.method | default('scram-sha-256')) }}
+{% endfor %}
+
+# Anything else has no matching line and is rejected.

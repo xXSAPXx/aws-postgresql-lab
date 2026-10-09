@@ -1,0 +1,60 @@
+---
+##################################################################
+# Install Java, Liquibase and the PostgreSQL JDBC driver:
+##################################################################
+
+- name: Install Java
+  ansible.builtin.dnf:
+    name: "{{ liquibase_java_package }}"
+    state: present
+
+- name: Create the Liquibase directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  loop:
+    - "{{ liquibase_dir }}/{{ liquibase_version }}"
+    - "{{ liquibase_projects_dir }}"
+    - /etc/liquibase
+
+- name: Download Liquibase (checksum verified)
+  ansible.builtin.get_url:
+    url: "{{ liquibase_download_url }}"
+    dest: "{{ liquibase_dir }}/liquibase-{{ liquibase_version }}.tar.gz"
+    checksum: "{{ liquibase_checksum }}"
+    mode: "0644"
+
+- name: Unpack Liquibase
+  ansible.builtin.unarchive:
+    src: "{{ liquibase_dir }}/liquibase-{{ liquibase_version }}.tar.gz"
+    dest: "{{ liquibase_dir }}/{{ liquibase_version }}"
+    remote_src: true
+    creates: "{{ liquibase_dir }}/{{ liquibase_version }}/liquibase"
+
+- name: Download the PostgreSQL JDBC driver into Liquibase's lib (checksum verified)
+  ansible.builtin.get_url:
+    url: "{{ liquibase_jdbc_download_url }}"
+    dest: "{{ liquibase_dir }}/{{ liquibase_version }}/lib/postgresql-{{ liquibase_jdbc_version }}.jar"
+    checksum: "{{ liquibase_jdbc_checksum }}"
+    mode: "0644"
+
+- name: Point the "current" link at Liquibase {{ liquibase_version }}
+  ansible.builtin.file:
+    src: "{{ liquibase_dir }}/{{ liquibase_version }}"
+    dest: "{{ liquibase_dir }}/current"
+    state: link
+
+
+##################################################################
+# Per database: changelog, settings, wrapper command, update:
+##################################################################
+
+- name: Set up and migrate each database
+  ansible.builtin.include_tasks: project.yml
+  loop: "{{ liquibase_projects }}"
+  loop_control:
+    loop_var: liquibase_project
+    label: "{{ liquibase_project.name }}"
