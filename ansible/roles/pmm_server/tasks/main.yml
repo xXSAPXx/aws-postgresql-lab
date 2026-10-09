@@ -19,11 +19,32 @@
       - containerd.io
     state: present
 
+# Docker turns this on itself in iptables mode, but not in nftables mode.
+- name: Enable IP forwarding (container networking)
+  ansible.posix.sysctl:
+    name: net.ipv4.ip_forward
+    value: "1"
+    sysctl_file: /etc/sysctl.d/90-docker.conf
+    state: present
+    reload: true
+
+- name: Configure Docker
+  ansible.builtin.copy:
+    content: "{{ pmm_server_docker_daemon_config | to_nice_json }}\n"
+    dest: /etc/docker/daemon.json
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart Docker
+
 - name: Start Docker
   ansible.builtin.systemd_service:
     name: docker
     state: started
     enabled: true
+
+- name: Apply a changed Docker configuration before starting containers
+  ansible.builtin.meta: flush_handlers
 
 
 ##################################################################

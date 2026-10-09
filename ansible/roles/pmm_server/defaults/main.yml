@@ -6,4 +6,8 @@ pmm_server_volume: pmm-data
 # Docker CE repository: Docker publishes one for RHEL and one for CentOS-compatible systems (Rocky, Alma).
 pmm_server_docker_repo: "https://download.docker.com/linux/{{ 'rhel' if ansible_facts['distribution'] == 'RedHat' else 'centos' }}/docker-ce.repo"
 
+# Docker daemon settings (/etc/docker/daemon.json). EL10 is nftables-based: Docker's default iptables mode
+# needs kernel modules (xt_addrtype) that the Rocky Linux 10 image doesn't ship, so use nftables there.
+pmm_server_docker_daemon_config: "{{ {'firewall-backend': 'nftables'} if ansible_facts['distribution_major_version'] | int >= 10 else {} }}"
+
 # pmm_admin_password: set by the lab (group_vars), required.
