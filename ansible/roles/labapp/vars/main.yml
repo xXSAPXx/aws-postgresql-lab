@@ -1,0 +1,6 @@
+---
+# Stored in the dashboard's description: a different revision means the repo version changed and is uploaded.
+labapp_dashboard_revision: "{{ (lookup('ansible.builtin.file', 'labapp-dashboard.json') | hash('sha1'))[:12] }}"
+labapp_dashboard_description: >-
+  Managed by Ansible (role labapp, revision {{ labapp_dashboard_revision }}).
+  Edit ansible/roles/labapp/files/labapp-dashboard.json in the repo: re-running the playbook replaces changes made here.

@@ -1,0 +1,15 @@
+{{ {
+  'interval': labapp_probe_interval,
+  'connect_interval': labapp_probe_connect_interval,
+  'timeout': labapp_probe_timeout,
+  'metrics_address': '0.0.0.0',
+  'metrics_port': labapp_metrics_port,
+  'outage_log': '/var/log/labapp/outages.jsonl',
+  'targets': labapp_targets,
+  'grafana': {
+    'url': labapp_pmm_url ~ '/graph',
+    'user': labapp_pmm_user,
+    'password': labapp_pmm_password,
+    'verify_tls': false,
+  },
+} | to_nice_json }}

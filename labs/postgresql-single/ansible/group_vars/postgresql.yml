@@ -7,10 +7,14 @@ pmm_client_services:
     password: "{{ postgresql_monitoring_password }}"
     extra_args: --query-source=pgstatmonitor --auto-discovery-limit=10
 
-# Load generation from the PMM server (pgbench) uses its own user and database:
+# Users and databases of the applications on the PMM server: pgbench, and labapp (the probe).
 postgresql_app_users:
   - name: bench
     password: "{{ postgresql_bench_password }}"
+  - name: labapp
+    password: "{{ postgresql_labapp_password }}"
 postgresql_app_databases:
   - name: bench
     owner: bench
+  - name: labapp
+    owner: labapp

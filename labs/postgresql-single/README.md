@@ -6,7 +6,7 @@ A single Percona PostgreSQL 17 server in a private subnet, monitored by PMM 3. U
 
 - **VPC** `10.0.0.0/24`: one public subnet, two private subnets in two availability zones, and a NAT gateway.
 - **postgresql-source**: Percona PostgreSQL 17 with pg_stat_monitor, in private subnet 1. Reachable only from inside the VPC.
-- **pmm-server**: PMM 3 (Docker) in the public subnet, also the SSH jump host and the load generator (psql, pgbench). SSH and the PMM UI accept connections only from your `admin_cidr`.
+- **pmm-server**: PMM 3 (Docker) in the public subnet, also the SSH jump host and the application side: the labapp probe and the load tools (psql, pgbench). SSH and the PMM UI accept connections only from your `admin_cidr`.
 
 Both servers run Rocky Linux 10 (the newest official image at deploy time): PostgreSQL on a t3.small, the PMM server on a t3.medium because it also generates the load. Change them with `postgresql_instance_type` and `pmm_instance_type` in `terraform.tfvars`; Rocky Linux 10 needs a current type such as t3 or m7i, not t2. For load tests, use a non-burstable type for PostgreSQL such as `m7i.large`: t3 instances are throttled once their CPU credits run out, which looks like a slow database in PMM.
 
@@ -71,6 +71,19 @@ sudo -iu postgres pg_top         # drill down into one PID
 
 - **[pg_activity](https://github.com/dalibo/pg_activity)**: all sessions with their queries, waits and per-process CPU / memory / IO. `F1` / `F2` / `F3` show running / waiting / blocking queries; select a process with the arrow keys and press `C` to cancel or `K` to terminate it. `h` lists all keys.
 - **[pg_top](https://pg_top.gitlab.io/)**: press a key, then enter a PID. `Q` shows its full query, `E` its EXPLAIN plan, `L` the locks it holds. `A` runs EXPLAIN ANALYZE, which **executes the statement again**, so never use it on an UPDATE or DELETE.
+
+## Measure downtime
+
+While the lab runs, the [labapp probe](../../tools/labapp/README.md) on the PMM server writes to PostgreSQL four times a second, like an application would. Whatever you do to the database, it measures what the application experiences: every outage with its exact start, end and duration, and the write and connect latency.
+
+- **In PMM:** the **Lab → Lab: Application probe** dashboard shows UP / DOWN, the ongoing outage, outages and downtime in the selected time range, and latency. Outages are also marked in red on PMM's PostgreSQL dashboards.
+- **On the PMM server:** `labapp outages` lists every outage measured:
+  ```bash
+  ssh pmm-server
+  labapp outages
+  ```
+
+Try it: `ssh postgresql-source`, run `sudo systemctl restart postgresql-17`, then check `labapp outages`. A restart costs the application about a second of write downtime.
 
 ## Break, fix, reset
 

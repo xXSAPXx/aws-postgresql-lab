@@ -33,6 +33,8 @@ ansible/roles/        Shared Ansible roles, used by every lab (how it works: ans
   pmm_client/         PMM client, registration, monitored services
   postgresql_client/  psql and pgbench on the load generator
   postgresql_tools/   Live monitoring on the database server: pg_activity, pg_top
+  labapp/             The simulated application: availability probe, PMM dashboard
+tools/labapp/         The simulated application's code (Python)
 labs/<lab>/
   terraform/          The lab's Terraform root, with its own state file
   ansible/            The lab's playbook (site.yml) and lab-specific roles

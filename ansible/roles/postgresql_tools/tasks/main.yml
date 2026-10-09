@@ -29,20 +29,9 @@
     virtualenv_command: python3 -m venv
     state: present
 
+# /usr/local/bin is on PATH in every login shell, also after sudo -i (role: common).
 - name: Put pg_activity on PATH
   ansible.builtin.file:
     src: "{{ postgresql_tools_pg_activity_venv }}/bin/pg_activity"
     dest: /usr/local/bin/pg_activity
     state: link
-
-# sudo -i starts with sudo's secure_path, which has no /usr/local/bin on EL. Put it first, as in a
-# normal login, so pg_activity and the pg_top wrapper are found.
-- name: Add /usr/local/bin to PATH in login shells that lack it
-  ansible.builtin.copy:
-    content: |
-      # Managed by Ansible (role: postgresql_tools). sudo -i starts without /usr/local/bin (pg_activity, pg_top wrapper).
-      case ":$PATH:" in *:/usr/local/bin:*) ;; *) PATH="/usr/local/bin:$PATH" ;; esac
-    dest: /etc/profile.d/usr-local-bin.sh
-    owner: root
-    group: root
-    mode: "0644"

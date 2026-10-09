@@ -1,0 +1,96 @@
+---
+##################################################################
+# Install labapp and run the probe as a service:
+##################################################################
+
+- name: Create the labapp system user
+  ansible.builtin.user:
+    name: "{{ labapp_user }}"
+    system: true
+    shell: /sbin/nologin
+    home: "{{ labapp_dir }}"
+    create_home: false
+
+- name: Create the labapp directories
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: directory
+    owner: root
+    group: "{{ item.group }}"
+    mode: "{{ item.mode }}"
+  loop:
+    - { path: "{{ labapp_dir }}", group: root, mode: "0755" }
+    - { path: /etc/labapp, group: "{{ labapp_user }}", mode: "0750" }
+
+- name: Install the Python libraries in a virtualenv
+  ansible.builtin.pip:
+    name: "{{ labapp_python_packages }}"
+    virtualenv: "{{ labapp_dir }}/venv"
+    virtualenv_command: python3 -m venv
+    state: present
+  notify: Restart the labapp probe
+
+- name: Install labapp
+  ansible.builtin.copy:
+    src: "{{ labapp_source }}"
+    dest: "{{ labapp_dir }}/labapp.py"
+    owner: root
+    group: root
+    mode: "0755"
+  notify: Restart the labapp probe
+
+- name: Put labapp on PATH
+  ansible.builtin.copy:
+    content: |
+      #!/bin/sh
+      # Managed by Ansible (role: labapp).
+      exec {{ labapp_dir }}/venv/bin/python {{ labapp_dir }}/labapp.py "$@"
+    dest: /usr/local/bin/labapp
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Write the probe configuration
+  ansible.builtin.template:
+    src: probe.json.j2
+    dest: /etc/labapp/probe.json
+    owner: root
+    group: "{{ labapp_user }}"
+    mode: "0640"
+  notify: Restart the labapp probe
+  no_log: true # contains passwords
+
+- name: Install the probe service
+  ansible.builtin.template:
+    src: labapp-probe.service.j2
+    dest: /etc/systemd/system/labapp-probe.service
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart the labapp probe
+
+- name: Start the probe
+  ansible.builtin.systemd_service:
+    name: labapp-probe
+    state: started
+    enabled: true
+    daemon_reload: true
+
+- name: Apply a changed probe before registering it
+  ansible.builtin.meta: flush_handlers
+
+- name: Wait for the probe's metrics
+  ansible.builtin.uri:
+    url: http://127.0.0.1:{{ labapp_metrics_port }}/metrics
+  register: labapp_metrics
+  until: labapp_metrics.status == 200
+  retries: 15
+  delay: 2
+
+
+##################################################################
+# PMM: collect the metrics, upload the dashboard:
+##################################################################
+
+- name: Register with PMM and upload the dashboard
+  ansible.builtin.import_tasks: pmm.yml

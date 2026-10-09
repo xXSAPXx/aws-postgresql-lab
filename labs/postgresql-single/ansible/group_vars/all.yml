@@ -4,3 +4,4 @@
 pmm_admin_password: "{{ lookup('ansible.builtin.password', playbook_dir ~ '/credentials/pmm_admin_password', length=24, chars=['ascii_letters', 'digits']) }}"
 postgresql_monitoring_password: "{{ lookup('ansible.builtin.password', playbook_dir ~ '/credentials/postgresql_pmm_password', length=24, chars=['ascii_letters', 'digits']) }}"
 postgresql_bench_password: "{{ lookup('ansible.builtin.password', playbook_dir ~ '/credentials/postgresql_bench_password', length=24, chars=['ascii_letters', 'digits']) }}"
+postgresql_labapp_password: "{{ lookup('ansible.builtin.password', playbook_dir ~ '/credentials/postgresql_labapp_password', length=24, chars=['ascii_letters', 'digits']) }}"
