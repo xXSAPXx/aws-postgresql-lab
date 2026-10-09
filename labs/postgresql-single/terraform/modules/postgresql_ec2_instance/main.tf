@@ -56,6 +56,15 @@ resource "aws_instance" "postgresql_ec2_instance" {
   key_name               = var.key_name
   #iam_instance_profile  = var.iam_instance_profile
 
+  # Burstable types (t3...): "standard" throttles when CPU credits run out instead of
+  # billing extra like AWS's default for t3 ("unlimited"). Other types don't take this setting.
+  dynamic "credit_specification" {
+    for_each = startswith(var.instance_type, "t") ? [1] : []
+    content {
+      cpu_credits = "standard"
+    }
+  }
+
   root_block_device {
     volume_size = var.volume_size
     volume_type = var.volume_type

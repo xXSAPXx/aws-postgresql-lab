@@ -8,9 +8,9 @@ A single Percona PostgreSQL 17 server in a private subnet, monitored by PMM 3. U
 - **postgresql-source**: Percona PostgreSQL 17 with pg_stat_monitor, in private subnet 1. Reachable only from inside the VPC.
 - **pmm-server**: PMM 3 (Docker) in the public subnet, also the SSH jump host. SSH and the PMM UI accept connections only from your `admin_cidr`.
 
-Both servers run Rocky Linux 9 (the newest official image at deploy time), on t2.small instances by default. Change them with `postgresql_instance_type` and `pmm_instance_type` in `terraform.tfvars`. For load tests, use a non-burstable type such as `m7i.large`: t2/t3 instances are throttled once their CPU credits run out, which looks like a slow database in PMM.
+Both servers run Rocky Linux 10 (the newest official image at deploy time), on t3.small instances by default. Change them with `postgresql_instance_type` and `pmm_instance_type` in `terraform.tfvars`; Rocky Linux 10 needs a current type such as t3 or m7i, not t2. For load tests, use a non-burstable type such as `m7i.large`: t3 instances are throttled once their CPU credits run out, which looks like a slow database in PMM.
 
-**Cost:** about $0.10 per hour in us-east-1 while the lab runs (NAT gateway $0.045, two t2.small $0.046, two public IPs $0.010, disks $0.003). Always run `terraform destroy` when you're done.
+**Cost:** about $0.10 per hour in us-east-1 while the lab runs (NAT gateway $0.045, two t3.small $0.042, two public IPs $0.010, disks $0.003). Always run `terraform destroy` when you're done.
 
 Terraform (`terraform/`) builds the infrastructure. Ansible (`ansible/`) installs and configures everything on the servers; [how the Ansible part works](../../ansible/README.md).
 

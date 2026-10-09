@@ -43,7 +43,7 @@ variable "ami_id" {
 variable "instance_type" {
   description = "EC2 instance type (PMM needs at least 2 GB RAM)"
   type        = string
-  default     = "t2.small"
+  default     = "t3.small"
 }
 
 variable "subnet_id" {

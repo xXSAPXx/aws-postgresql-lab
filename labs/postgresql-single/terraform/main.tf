@@ -7,17 +7,17 @@
 # Shared modules live in ../../../modules, lab-specific modules in ./modules.
 
 
-# Server image: the newest official Rocky Linux 9 (free, RHEL-compatible), published by the Rocky Enterprise Software Foundation.
+# Server image: the newest official Rocky Linux 10 (free, RHEL-compatible), published by the Rocky Enterprise Software Foundation.
 # The instances ignore later image updates, so a new Rocky release never replaces the servers of a running lab.
 ######################################################################################
 
-data "aws_ami" "rocky_9" {
+data "aws_ami" "rocky_10" {
   most_recent = true
   owners      = ["792107900819"]
 
   filter {
     name   = "name"
-    values = ["Rocky-9-EC2-Base-9.*"]
+    values = ["Rocky-10-EC2-Base-10.*"]
   }
 
   filter {
@@ -67,7 +67,7 @@ module "postgresql_ec2_instance" {
   sec_group_description = "Allow SSH / PMM and PostgreSQL Ports"
 
   # --- PostgreSQL_EC2_Instance Settings ---
-  ami_id        = data.aws_ami.rocky_9.id
+  ami_id        = data.aws_ami.rocky_10.id
   instance_type = var.postgresql_instance_type
   key_name      = var.aws_key_pair
   subnet_id     = module.vpc.private_subnet_1_id
@@ -93,7 +93,7 @@ module "pmm_server" {
   sec_group_description = "Allow SSH / PMM Ports"
 
   # --- PMM_EC2_Instance Settings ---
-  ami_id        = data.aws_ami.rocky_9.id
+  ami_id        = data.aws_ami.rocky_10.id
   instance_type = var.pmm_instance_type
   key_name      = var.aws_key_pair
   subnet_id     = module.vpc.public_subnet_1_id

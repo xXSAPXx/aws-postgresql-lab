@@ -6,6 +6,7 @@
 - name: Disable the distribution's PostgreSQL module (Percona packages are used instead)
   ansible.builtin.command: dnf -y module disable postgresql
   changed_when: false
+  when: ansible_facts['distribution_major_version'] | int < 10 # EL10 has no dnf modules
 
 - name: Enable the Percona Distribution for PostgreSQL repository
   ansible.builtin.command: percona-release setup ppg{{ postgresql_version }}

@@ -9,7 +9,7 @@ postgresql_packages:
   - percona-postgresql{{ postgresql_version }}-server
   - percona-pgbackrest
   - percona-pg_repack{{ postgresql_version }}
-  - percona-pg-stat-monitor{{ postgresql_version }}
+  - percona-pg_stat_monitor{{ postgresql_version }}
   - python3-psycopg2 # used by the community.postgresql modules
 
 # Written to conf.d/01-lab.conf (included at the end of postgresql.conf, so these win):
