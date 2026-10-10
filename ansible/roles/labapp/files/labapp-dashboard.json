@@ -9,6 +9,9 @@
   "refresh": "5s",
   "time": { "from": "now-1h", "to": "now" },
   "schemaVersion": 39,
+  "links": [
+    { "title": "PostgreSQL lock blocking", "type": "link", "icon": "dashboard", "url": "/graph/d/postgresql-lock-blocking/postgresql-lock-blocking", "tooltip": "Who blocks whom: root blockers by user, with their statements", "keepTime": true, "targetBlank": false }
+  ],
   "annotations": {
     "list": [
       {
@@ -379,66 +382,6 @@
       "targets": [ { "refId": "A", "expr": "max by (job_name) (labapp_job_last_duration_seconds)", "legendFormat": "{{job_name}}", "instant": true } ],
       "fieldConfig": { "defaults": { "unit": "s", "decimals": 0, "min": 0, "color": { "mode": "continuous-BlYlRd" } }, "overrides": [] },
       "options": { "orientation": "horizontal", "displayMode": "basic", "showUnfilled": true, "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false } }
-    },
-
-    {
-      "id": 104,
-      "type": "row",
-      "title": "Locks: who blocks whom (closed by default: it names the culprit)",
-      "collapsed": true,
-      "gridPos": { "x": 0, "y": 51, "w": 24, "h": 1 },
-      "panels": [
-        {
-          "id": 40,
-          "type": "timeseries",
-          "title": "Sessions blocked, by root blocker",
-          "description": "Sampled every 5 s from pg_stat_activity (a custom query of the PMM client). A root blocker is the session at the head of a lock queue: it is in the way and not waiting on a lock itself. Only blockers whose transaction has been open for 1 s or more are shown, so the short lock waits of a healthy database stay out. The dashed line is every session waiting on a lock, however briefly.",
-          "gridPos": { "x": 0, "y": 52, "w": 24, "h": 8 },
-          "datasource": { "type": "prometheus", "uid": "${datasource}" },
-          "targets": [
-            { "refId": "A", "expr": "sum by (blocking_application, blocking_state, blocking_query) (pg_lock_blocking_sessions)", "legendFormat": "{{blocking_application}} ({{blocking_state}}): {{blocking_query}}" },
-            { "refId": "B", "expr": "sum(pg_lock_waiting_sessions)", "legendFormat": "all sessions waiting on a lock" }
-          ],
-          "fieldConfig": {
-            "defaults": { "decimals": 0, "min": 0, "custom": { "drawStyle": "line", "lineInterpolation": "stepAfter", "lineWidth": 1, "fillOpacity": 40, "stacking": { "mode": "normal", "group": "A" }, "showPoints": "never", "spanNulls": false } },
-            "overrides": [ { "matcher": { "id": "byName", "options": "all sessions waiting on a lock" }, "properties": [ { "id": "custom.stacking", "value": { "mode": "none" } }, { "id": "custom.fillOpacity", "value": 0 }, { "id": "custom.lineStyle", "value": { "fill": "dash", "dash": [10, 10] } }, { "id": "color", "value": { "mode": "fixed", "fixedColor": "text" } } ] } ]
-          },
-          "options": { "legend": { "showLegend": true, "displayMode": "table", "placement": "bottom", "calcs": ["max"] }, "tooltip": { "mode": "multi", "sort": "desc" } }
-        },
-        {
-          "id": 41,
-          "type": "table",
-          "title": "Root blockers in the selected time range",
-          "description": "Each session that was at the root of lock waits: its application, user, state and statement (first 100 characters), the most sessions it blocked at once, and how long its transaction was open. The statement is what the blocker was running when sampled, which is not always the one that took the lock. A blocker shows one line per statement and state it was seen in.",
-          "gridPos": { "x": 0, "y": 60, "w": 24, "h": 8 },
-          "datasource": { "type": "prometheus", "uid": "${datasource}" },
-          "targets": [
-            { "refId": "A", "expr": "max by (service_name, datname, blocking_application, blocking_user, blocking_state, blocking_query) (max_over_time(pg_lock_blocking_sessions[$__range]))", "instant": true, "format": "table" },
-            { "refId": "B", "expr": "max by (service_name, datname, blocking_application, blocking_user, blocking_state, blocking_query) (max_over_time(pg_lock_blocking_transaction_seconds[$__range]))", "instant": true, "format": "table" }
-          ],
-          "transformations": [
-            { "id": "merge", "options": {} },
-            {
-              "id": "organize",
-              "options": {
-                "excludeByName": { "Time": true },
-                "indexByName": { "service_name": 0, "datname": 1, "blocking_application": 2, "blocking_user": 3, "blocking_state": 4, "blocking_query": 5, "Value #A": 6, "Value #B": 7 },
-                "renameByName": { "service_name": "Server", "datname": "Database", "blocking_application": "Blocking application", "blocking_user": "User", "blocking_state": "State", "blocking_query": "Blocking statement", "Value #A": "Most sessions blocked", "Value #B": "Transaction open for" }
-              }
-            },
-            { "id": "sortBy", "options": { "fields": {}, "sort": [ { "field": "Most sessions blocked", "desc": true } ] } }
-          ],
-          "fieldConfig": {
-            "defaults": { "custom": { "align": "auto", "cellOptions": { "type": "auto" } } },
-            "overrides": [
-              { "matcher": { "id": "byName", "options": "Most sessions blocked" }, "properties": [ { "id": "decimals", "value": 0 }, { "id": "custom.width", "value": 190 } ] },
-              { "matcher": { "id": "byName", "options": "Transaction open for" }, "properties": [ { "id": "unit", "value": "s" }, { "id": "decimals", "value": 0 }, { "id": "custom.width", "value": 180 } ] },
-              { "matcher": { "id": "byName", "options": "Blocking statement" }, "properties": [ { "id": "custom.minWidth", "value": 420 } ] }
-            ]
-          },
-          "options": { "showHeader": true, "cellHeight": "sm", "footer": { "show": false } }
-        }
-      ]
     }
   ]
 }

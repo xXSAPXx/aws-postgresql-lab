@@ -1,0 +1,314 @@
+{
+  "id": null,
+  "uid": "postgresql-lock-blocking",
+  "title": "PostgreSQL lock blocking",
+  "tags": ["postgresql", "locks"],
+  "timezone": "browser",
+  "editable": true,
+  "graphTooltip": 1,
+  "refresh": "10s",
+  "time": { "from": "now-1h", "to": "now" },
+  "schemaVersion": 39,
+  "links": [],
+  "annotations": {
+    "list": [
+      {
+        "builtIn": 1,
+        "datasource": { "type": "grafana", "uid": "-- Grafana --" },
+        "enable": true,
+        "hide": true,
+        "iconColor": "rgba(0, 211, 255, 1)",
+        "name": "Annotations & Alerts",
+        "type": "dashboard"
+      }
+    ]
+  },
+  "templating": {
+    "list": [
+      {
+        "name": "datasource",
+        "label": "Metrics",
+        "type": "datasource",
+        "query": "prometheus",
+        "current": { "selected": true, "text": "Metrics", "value": "Metrics" },
+        "hide": 2,
+        "includeAll": false,
+        "multi": false,
+        "refresh": 1,
+        "regex": ""
+      },
+      {
+        "name": "service_name",
+        "label": "Server",
+        "type": "query",
+        "datasource": { "type": "prometheus", "uid": "${datasource}" },
+        "definition": "label_values(pg_up, service_name)",
+        "query": { "query": "label_values(pg_up, service_name)", "refId": "service_name" },
+        "current": { "selected": true, "text": ["All"], "value": ["$__all"] },
+        "includeAll": true,
+        "allValue": ".*",
+        "multi": true,
+        "refresh": 2,
+        "sort": 1,
+        "hide": 0
+      },
+      {
+        "name": "datname",
+        "label": "Database",
+        "type": "query",
+        "datasource": { "type": "prometheus", "uid": "${datasource}" },
+        "definition": "label_values(pg_stat_database_tup_fetched{service_name=~\"$service_name\"}, datname)",
+        "query": { "query": "label_values(pg_stat_database_tup_fetched{service_name=~\"$service_name\"}, datname)", "refId": "datname" },
+        "current": { "selected": true, "text": ["All"], "value": ["$__all"] },
+        "includeAll": true,
+        "allValue": ".*",
+        "multi": true,
+        "refresh": 2,
+        "sort": 1,
+        "hide": 0
+      },
+      {
+        "name": "blocking_user",
+        "label": "Blocking user",
+        "description": "The users that were root blockers in the selected time range. Click a user in a chart to select it.",
+        "type": "query",
+        "datasource": { "type": "prometheus", "uid": "${datasource}" },
+        "definition": "label_values(pg_lock_blocking_sessions{service_name=~\"$service_name\", datname=~\"$datname\"}, blocking_user)",
+        "query": { "query": "label_values(pg_lock_blocking_sessions{service_name=~\"$service_name\", datname=~\"$datname\"}, blocking_user)", "refId": "blocking_user" },
+        "current": { "selected": true, "text": ["All"], "value": ["$__all"] },
+        "includeAll": true,
+        "allValue": ".*",
+        "multi": true,
+        "refresh": 2,
+        "sort": 1,
+        "hide": 0
+      },
+      {
+        "name": "resolution",
+        "label": "Sample interval (s)",
+        "description": "How often PMM collects these metrics: its high resolution, 5 s by default. Used to turn samples into blocked session-seconds.",
+        "type": "textbox",
+        "query": "5",
+        "current": { "selected": true, "text": "5", "value": "5" },
+        "options": [ { "selected": true, "text": "5", "value": "5" } ],
+        "hide": 0
+      }
+    ]
+  },
+  "panels": [
+    { "id": 100, "type": "row", "title": "Now", "collapsed": false, "gridPos": { "x": 0, "y": 0, "w": 24, "h": 1 }, "panels": [] },
+    {
+      "id": 1,
+      "type": "stat",
+      "title": "Sessions waiting on a lock",
+      "description": "Every session waiting on a lock right now, however briefly. Some waiting is normal in a busy database.",
+      "gridPos": { "x": 0, "y": 1, "w": 5, "h": 4 },
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "targets": [{ "refId": "A", "expr": "sum(pg_lock_waiting_sessions{service_name=~\"$service_name\", datname=~\"$datname\"}) or vector(0)", "instant": true }],
+      "fieldConfig": { "defaults": { "decimals": 0, "color": { "mode": "fixed", "fixedColor": "text" } }, "overrides": [] },
+      "options": { "colorMode": "value", "graphMode": "area", "justifyMode": "center", "textMode": "value", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false } }
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "Blocked by a persisting blocker",
+      "description": "Sessions waiting behind a root blocker whose transaction has been open for 1 s or more (the threshold set in the query file). A root blocker is the session at the head of a lock queue: it is in the way and not waiting on a lock itself.",
+      "gridPos": { "x": 5, "y": 1, "w": 5, "h": 4 },
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "targets": [{ "refId": "A", "expr": "sum(pg_lock_blocking_sessions{service_name=~\"$service_name\", datname=~\"$datname\", blocking_user=~\"$blocking_user\"}) or vector(0)", "instant": true }],
+      "fieldConfig": { "defaults": { "decimals": 0, "color": { "mode": "thresholds" }, "thresholds": { "mode": "absolute", "steps": [ { "color": "green", "value": null }, { "color": "orange", "value": 1 }, { "color": "red", "value": 10 } ] } }, "overrides": [] },
+      "options": { "colorMode": "background", "graphMode": "area", "justifyMode": "center", "textMode": "value", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false } }
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "Blocking sessions",
+      "description": "How many sessions are root blockers right now.",
+      "gridPos": { "x": 10, "y": 1, "w": 4, "h": 4 },
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "targets": [{ "refId": "A", "expr": "sum(pg_lock_blocking_blockers{service_name=~\"$service_name\", datname=~\"$datname\", blocking_user=~\"$blocking_user\"}) or vector(0)", "instant": true }],
+      "fieldConfig": { "defaults": { "decimals": 0, "color": { "mode": "thresholds" }, "thresholds": { "mode": "absolute", "steps": [ { "color": "green", "value": null }, { "color": "orange", "value": 1 } ] } }, "overrides": [] },
+      "options": { "colorMode": "value", "graphMode": "none", "justifyMode": "center", "textMode": "value", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false } }
+    },
+    {
+      "id": 4,
+      "type": "stat",
+      "title": "Oldest blocking transaction",
+      "description": "How long the oldest root blocker's transaction has been open.",
+      "gridPos": { "x": 14, "y": 1, "w": 5, "h": 4 },
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "targets": [{ "refId": "A", "expr": "max(pg_lock_blocking_transaction_seconds{service_name=~\"$service_name\", datname=~\"$datname\", blocking_user=~\"$blocking_user\"}) or vector(0)", "instant": true }],
+      "fieldConfig": { "defaults": { "unit": "s", "decimals": 0, "color": { "mode": "thresholds" }, "thresholds": { "mode": "absolute", "steps": [ { "color": "green", "value": null }, { "color": "orange", "value": 1 }, { "color": "red", "value": 60 } ] } }, "overrides": [] },
+      "options": { "colorMode": "value", "graphMode": "none", "justifyMode": "center", "textMode": "value", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false } }
+    },
+    {
+      "id": 5,
+      "type": "stat",
+      "title": "Blocked session-seconds (time range)",
+      "description": "The waiting that persisting blockers caused in the selected time range: sessions blocked x seconds. 20 sessions blocked for 3 s and 5 sessions blocked for 12 s are both 60. Each sample counts for the sample interval.",
+      "gridPos": { "x": 19, "y": 1, "w": 5, "h": 4 },
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "targets": [{ "refId": "A", "expr": "sum(sum_over_time(pg_lock_blocking_sessions{service_name=~\"$service_name\", datname=~\"$datname\", blocking_user=~\"$blocking_user\"}[$__range])) * $resolution or vector(0)", "instant": true }],
+      "fieldConfig": { "defaults": { "decimals": 0, "color": { "mode": "fixed", "fixedColor": "text" } }, "overrides": [] },
+      "options": { "colorMode": "value", "graphMode": "none", "justifyMode": "center", "textMode": "value", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false } }
+    },
+
+    { "id": 101, "type": "row", "title": "Who blocks", "collapsed": false, "gridPos": { "x": 0, "y": 5, "w": 24, "h": 1 }, "panels": [] },
+    {
+      "id": 10,
+      "type": "timeseries",
+      "title": "Sessions blocked, by blocking user",
+      "description": "For each user: how many sessions wait behind its root blockers, sampled every few seconds. A spike is a user that starts blocking more sessions. Click a user's line and choose \"Show only this user\" to filter the dashboard, including the statements table.",
+      "gridPos": { "x": 0, "y": 6, "w": 16, "h": 9 },
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "targets": [ { "refId": "A", "expr": "sum by (blocking_user) (pg_lock_blocking_sessions{service_name=~\"$service_name\", datname=~\"$datname\", blocking_user=~\"$blocking_user\"})", "legendFormat": "{{blocking_user}}" } ],
+      "fieldConfig": {
+        "defaults": {
+          "decimals": 0,
+          "min": 0,
+          "custom": { "drawStyle": "line", "lineInterpolation": "stepAfter", "lineWidth": 1, "fillOpacity": 40, "stacking": { "mode": "normal", "group": "A" }, "showPoints": "never", "spanNulls": false },
+          "links": [ { "title": "Show only this user", "url": "/graph/d/postgresql-lock-blocking/postgresql-lock-blocking?${__url_time_range}&${service_name:queryparam}&${datname:queryparam}&var-resolution=${resolution}&var-blocking_user=${__field.labels.blocking_user}" } ]
+        },
+        "overrides": []
+      },
+      "options": { "legend": { "showLegend": true, "displayMode": "table", "placement": "bottom", "calcs": ["max", "lastNotNull"] }, "tooltip": { "mode": "multi", "sort": "desc" } }
+    },
+    {
+      "id": 11,
+      "type": "bargauge",
+      "title": "Blocked session-seconds, by blocking user (time range)",
+      "description": "Which user caused the most waiting in the selected time range: sessions blocked x seconds. Unlike the peak, it tells a user that blocked many sessions briefly from one that blocked a few for a long time.",
+      "gridPos": { "x": 16, "y": 6, "w": 8, "h": 9 },
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "targets": [ { "refId": "A", "expr": "sort_desc(sum by (blocking_user) (sum_over_time(pg_lock_blocking_sessions{service_name=~\"$service_name\", datname=~\"$datname\", blocking_user=~\"$blocking_user\"}[$__range])) * $resolution)", "legendFormat": "{{blocking_user}}", "instant": true } ],
+      "fieldConfig": {
+        "defaults": {
+          "decimals": 0,
+          "min": 0,
+          "color": { "mode": "continuous-BlYlRd" },
+          "links": [ { "title": "Show only this user", "url": "/graph/d/postgresql-lock-blocking/postgresql-lock-blocking?${__url_time_range}&${service_name:queryparam}&${datname:queryparam}&var-resolution=${resolution}&var-blocking_user=${__field.labels.blocking_user}" } ]
+        },
+        "overrides": []
+      },
+      "options": { "orientation": "horizontal", "displayMode": "basic", "showUnfilled": true, "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false } }
+    },
+    {
+      "id": 12,
+      "type": "timeseries",
+      "title": "Sessions blocked, by blocking application",
+      "description": "The same, by the application_name of the root blockers.",
+      "gridPos": { "x": 0, "y": 15, "w": 12, "h": 8 },
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "targets": [ { "refId": "A", "expr": "sum by (blocking_application) (pg_lock_blocking_sessions{service_name=~\"$service_name\", datname=~\"$datname\", blocking_user=~\"$blocking_user\"})", "legendFormat": "{{blocking_application}}" } ],
+      "fieldConfig": { "defaults": { "decimals": 0, "min": 0, "custom": { "drawStyle": "line", "lineInterpolation": "stepAfter", "lineWidth": 1, "fillOpacity": 40, "stacking": { "mode": "normal", "group": "A" }, "showPoints": "never", "spanNulls": false } }, "overrides": [] },
+      "options": { "legend": { "showLegend": true, "displayMode": "table", "placement": "bottom", "calcs": ["max"] }, "tooltip": { "mode": "multi", "sort": "desc" } }
+    },
+    {
+      "id": 13,
+      "type": "timeseries",
+      "title": "Oldest blocking transaction, by blocking user",
+      "description": "How long each user's oldest blocking transaction had been open at each sample. A line that keeps climbing is one transaction that is still open and still in the way.",
+      "gridPos": { "x": 12, "y": 15, "w": 12, "h": 8 },
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "targets": [ { "refId": "A", "expr": "max by (blocking_user) (pg_lock_blocking_transaction_seconds{service_name=~\"$service_name\", datname=~\"$datname\", blocking_user=~\"$blocking_user\"})", "legendFormat": "{{blocking_user}}" } ],
+      "fieldConfig": { "defaults": { "unit": "s", "min": 0, "custom": { "drawStyle": "line", "lineWidth": 1, "fillOpacity": 10, "showPoints": "never", "spanNulls": false } }, "overrides": [] },
+      "options": { "legend": { "showLegend": true, "displayMode": "table", "placement": "bottom", "calcs": ["max"] }, "tooltip": { "mode": "multi", "sort": "desc" } }
+    },
+
+    { "id": 102, "type": "row", "title": "What they run", "collapsed": false, "gridPos": { "x": 0, "y": 23, "w": 24, "h": 1 }, "panels": [] },
+    {
+      "id": 20,
+      "type": "table",
+      "title": "Blocking statements (time range)",
+      "description": "The statements of the root blockers in the selected time range, for the selected users: the most sessions each blocked at once, the waiting it caused (blocked session-seconds), and how long its transaction was open. The statement is what the blocker was running when sampled (first 100 characters), which is not always the one that took the lock. A blocker shows one line per statement and state it was seen in.",
+      "gridPos": { "x": 0, "y": 24, "w": 24, "h": 9 },
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "targets": [
+        { "refId": "A", "expr": "max by (service_name, datname, blocking_user, blocking_application, blocking_state, blocking_query) (max_over_time(pg_lock_blocking_statement_sessions{service_name=~\"$service_name\", datname=~\"$datname\", blocking_user=~\"$blocking_user\"}[$__range]))", "instant": true, "format": "table" },
+        { "refId": "B", "expr": "sum by (service_name, datname, blocking_user, blocking_application, blocking_state, blocking_query) (sum_over_time(pg_lock_blocking_statement_sessions{service_name=~\"$service_name\", datname=~\"$datname\", blocking_user=~\"$blocking_user\"}[$__range])) * $resolution", "instant": true, "format": "table" },
+        { "refId": "C", "expr": "max by (service_name, datname, blocking_user, blocking_application, blocking_state, blocking_query) (max_over_time(pg_lock_blocking_statement_transaction_seconds{service_name=~\"$service_name\", datname=~\"$datname\", blocking_user=~\"$blocking_user\"}[$__range]))", "instant": true, "format": "table" }
+      ],
+      "transformations": [
+        { "id": "merge", "options": {} },
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": { "Time": true },
+            "indexByName": { "service_name": 0, "datname": 1, "blocking_user": 2, "blocking_application": 3, "blocking_state": 4, "blocking_query": 5, "Value #A": 6, "Value #B": 7, "Value #C": 8 },
+            "renameByName": { "service_name": "Server", "datname": "Database", "blocking_user": "User", "blocking_application": "Application", "blocking_state": "State", "blocking_query": "Blocking statement", "Value #A": "Most sessions blocked", "Value #B": "Blocked session-seconds", "Value #C": "Transaction open for" }
+          }
+        },
+        { "id": "sortBy", "options": { "fields": {}, "sort": [ { "field": "Blocked session-seconds", "desc": true } ] } }
+      ],
+      "fieldConfig": {
+        "defaults": { "custom": { "align": "auto", "cellOptions": { "type": "auto" } } },
+        "overrides": [
+          { "matcher": { "id": "byName", "options": "Most sessions blocked" }, "properties": [ { "id": "decimals", "value": 0 }, { "id": "custom.width", "value": 180 } ] },
+          { "matcher": { "id": "byName", "options": "Blocked session-seconds" }, "properties": [ { "id": "decimals", "value": 0 }, { "id": "custom.width", "value": 190 } ] },
+          { "matcher": { "id": "byName", "options": "Transaction open for" }, "properties": [ { "id": "unit", "value": "s" }, { "id": "decimals", "value": 0 }, { "id": "custom.width", "value": 170 } ] },
+          { "matcher": { "id": "byName", "options": "Blocking statement" }, "properties": [ { "id": "custom.minWidth", "value": 420 } ] }
+        ]
+      },
+      "options": { "showHeader": true, "cellHeight": "sm", "footer": { "show": false } }
+    },
+    {
+      "id": 21,
+      "type": "timeseries",
+      "title": "Sessions blocked, by blocking statement",
+      "description": "The ten statements blocking the most sessions at each sample.",
+      "gridPos": { "x": 0, "y": 33, "w": 24, "h": 8 },
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "targets": [ { "refId": "A", "expr": "sum by (blocking_user, blocking_application, blocking_state, blocking_query) (pg_lock_blocking_statement_sessions{service_name=~\"$service_name\", datname=~\"$datname\", blocking_user=~\"$blocking_user\"})", "legendFormat": "{{blocking_user}} / {{blocking_application}} ({{blocking_state}}): {{blocking_query}}" } ],
+      "fieldConfig": { "defaults": { "decimals": 0, "min": 0, "custom": { "drawStyle": "line", "lineInterpolation": "stepAfter", "lineWidth": 1, "fillOpacity": 40, "stacking": { "mode": "normal", "group": "A" }, "showPoints": "never", "spanNulls": false } }, "overrides": [] },
+      "options": { "legend": { "showLegend": true, "displayMode": "table", "placement": "bottom", "calcs": ["max"] }, "tooltip": { "mode": "multi", "sort": "desc" } }
+    },
+
+    { "id": 103, "type": "row", "title": "Who waits", "collapsed": false, "gridPos": { "x": 0, "y": 41, "w": 24, "h": 1 }, "panels": [] },
+    {
+      "id": 30,
+      "type": "timeseries",
+      "title": "Sessions waiting on a lock, by waiting user",
+      "description": "Every session waiting on a lock at each sample, however briefly, by its user. This side has no filter: short waits show here and are normal.",
+      "gridPos": { "x": 0, "y": 42, "w": 12, "h": 8 },
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "targets": [ { "refId": "A", "expr": "sum by (waiting_user) (pg_lock_waiting_sessions{service_name=~\"$service_name\", datname=~\"$datname\"})", "legendFormat": "{{waiting_user}}" } ],
+      "fieldConfig": { "defaults": { "decimals": 0, "min": 0, "custom": { "drawStyle": "line", "lineInterpolation": "stepAfter", "lineWidth": 1, "fillOpacity": 30, "stacking": { "mode": "normal", "group": "A" }, "showPoints": "never", "spanNulls": false } }, "overrides": [] },
+      "options": { "legend": { "showLegend": true, "displayMode": "table", "placement": "bottom", "calcs": ["max"] }, "tooltip": { "mode": "multi", "sort": "desc" } }
+    },
+    {
+      "id": 31,
+      "type": "timeseries",
+      "title": "Sessions waiting on a lock, by waiting application",
+      "description": "The same, by application_name: which applications are being held up.",
+      "gridPos": { "x": 12, "y": 42, "w": 12, "h": 8 },
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "targets": [ { "refId": "A", "expr": "sum by (waiting_application) (pg_lock_waiting_sessions{service_name=~\"$service_name\", datname=~\"$datname\"})", "legendFormat": "{{waiting_application}}" } ],
+      "fieldConfig": { "defaults": { "decimals": 0, "min": 0, "custom": { "drawStyle": "line", "lineInterpolation": "stepAfter", "lineWidth": 1, "fillOpacity": 30, "stacking": { "mode": "normal", "group": "A" }, "showPoints": "never", "spanNulls": false } }, "overrides": [] },
+      "options": { "legend": { "showLegend": true, "displayMode": "table", "placement": "bottom", "calcs": ["max"] }, "tooltip": { "mode": "multi", "sort": "desc" } }
+    },
+
+    { "id": 104, "type": "row", "title": "PostgreSQL's own counters", "collapsed": false, "gridPos": { "x": 0, "y": 50, "w": 24, "h": 1 }, "panels": [] },
+    {
+      "id": 40,
+      "type": "timeseries",
+      "title": "Locks held, by mode",
+      "description": "PMM's standard metric: how many locks of each mode exist. It says how much locking goes on, not who waits or who blocks.",
+      "gridPos": { "x": 0, "y": 51, "w": 12, "h": 8 },
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "targets": [ { "refId": "A", "expr": "sum by (mode) (pg_locks_count{service_name=~\"$service_name\", datname=~\"$datname\"}) > 0", "legendFormat": "{{mode}}" } ],
+      "fieldConfig": { "defaults": { "decimals": 0, "min": 0, "custom": { "drawStyle": "line", "lineWidth": 1, "fillOpacity": 10, "showPoints": "never" } }, "overrides": [] },
+      "options": { "legend": { "showLegend": true, "displayMode": "table", "placement": "bottom", "calcs": ["max"] }, "tooltip": { "mode": "multi", "sort": "desc" } }
+    },
+    {
+      "id": 41,
+      "type": "timeseries",
+      "title": "Deadlocks",
+      "description": "PMM's standard metric: deadlocks PostgreSQL detected and resolved by aborting a transaction, per database.",
+      "gridPos": { "x": 12, "y": 51, "w": 12, "h": 8 },
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "targets": [ { "refId": "A", "expr": "sum by (datname) (increase(pg_stat_database_deadlocks{service_name=~\"$service_name\", datname=~\"$datname\"}[$__rate_interval]))", "legendFormat": "{{datname}}" } ],
+      "fieldConfig": { "defaults": { "decimals": 0, "min": 0, "custom": { "drawStyle": "bars", "lineWidth": 1, "fillOpacity": 60, "showPoints": "never" } }, "overrides": [] },
+      "options": { "legend": { "showLegend": true, "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi", "sort": "desc" } }
+    }
+  ]
+}

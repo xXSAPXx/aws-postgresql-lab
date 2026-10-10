@@ -164,14 +164,15 @@ PostgreSQL keeps no history of lock waits, and PMM has no view of them for Postg
 | pg_activity (`F2` waiting, `F3` blocking), or `pg_stat_activity` with `pg_blocking_pids()` | Blocker and waiting sessions, with their statements | Live only |
 | The server log, `/var/lib/pgsql/17/data/log/` (`log_lock_waits`), raw or as a [pgBadger report](#a-report-from-the-server-log-pgbadger) | Every wait longer than 1 s: the waiting statement, the table, the blocker's process ID | Yes. Find the blocker with `sudo grep '\[<pid>\]'` in the same log; it's only there if one of its statements took longer than 500 ms |
 
-The lab adds the missing piece to PMM. A custom query of the PMM client samples `pg_stat_activity` every 5 seconds and records the sessions at the **root** of lock waits: their user, application, state and statement, and how many sessions wait behind each. See the **Locks: who blocks whom** row of the **Lab → Lab: Application** dashboard. The row is closed by default, because it names the culprit of the exercises.
+The lab adds the missing piece to PMM: the **Lab → PostgreSQL lock blocking** dashboard. Custom queries of the PMM client sample `pg_stat_activity` every 5 seconds and record the sessions at the **root** of lock waits, so PMM keeps the history:
 
-- **Root blocker:** PostgreSQL reports sessions queued on the same row as blocking each other. The query follows each queue back to the session that is in the way and is not waiting itself.
-- **Only persisting blockers:** a healthy database has many lock waits of a few milliseconds. A blocker is reported once its transaction has been open for 1 second (`pmm_client_lock_blocking_min_seconds`). The filter is on the blocker, not on the waiting sessions: the application gives up after its `lock_timeout` of 2 s, so no session ever waits long, even while one blocker stops the checkouts for 90 seconds.
-- **The statement is the blocker's current one,** which is not always the one that took the lock.
-- **It samples,** so a blocker that comes and goes between two samples is missed. Each sample costs about 1 ms per database.
+- **Who blocks:** sessions blocked over time by blocking user and by application, and which user caused the most waiting in the selected time range. Click a user to filter the dashboard to it.
+- **What they run:** the blocking statements of the selected users, with the most sessions each blocked and how long its transaction was open.
+- **Who waits:** the users and applications being held up.
 
-The metrics are `pg_lock_blocking_sessions` and `pg_lock_blocking_transaction_seconds` (per root blocker), and `pg_lock_waiting_sessions` (every session waiting on a lock, however briefly). Switch them off with `pmm_client_lock_blocking_enabled: false`.
+It opens from the link at the top of **Lab: Application**. Look at it after you have tried an exercise yourself: it names the culprit.
+
+How to read it, and how to install the same in another PMM: [PostgreSQL lock blocking](../../ansible/roles/pmm_client/README.md). Switch it off with `pmm_client_lock_blocking_enabled: false`.
 
 ## Break, fix, reset
 
