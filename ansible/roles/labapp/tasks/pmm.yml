@@ -63,14 +63,15 @@
     validate_certs: false
     body_format: json
     body:
-      dashboard: "{{ lookup('ansible.builtin.file', item.item.file) | from_json | combine({'description': labapp_description}) }}"
+      dashboard: "{{ lookup('ansible.builtin.file', labapp_dashboard_path) | from_json | combine({'description': labapp_description}) }}"
       folderUid: "{{ labapp_dashboard_folder_uid }}"
       overwrite: true
-      message: Uploaded by Ansible (role labapp)
+      message: Uploaded by Ansible
   vars:
+    labapp_dashboard_path: "{{ role_path }}/../{{ item.item.file }}"
     labapp_description: >-
-      Managed by Ansible (role labapp, revision {{ (lookup('ansible.builtin.file', item.item.file) | hash('sha1'))[:12] }}).
-      Edit ansible/roles/labapp/files/{{ item.item.file }} in the repo: re-running the playbook replaces changes made here.
+      Managed by Ansible (revision {{ (lookup('ansible.builtin.file', labapp_dashboard_path) | hash('sha1'))[:12] }}).
+      Edit ansible/roles/{{ item.item.file }} in the repo: re-running the playbook replaces changes made here.
   loop: "{{ labapp_current_dashboards.results }}"
   loop_control:
     label: "{{ item.item.uid }}"
