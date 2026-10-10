@@ -357,7 +357,7 @@
       "description": "When the long-running reports (sales dashboard ~30 s, lifetime-value export ~1 min, BI extract ~5 min) and the batch jobs run.",
       "gridPos": { "x": 0, "y": 44, "w": 16, "h": 7 },
       "datasource": { "type": "prometheus", "uid": "${datasource}" },
-      "targets": [ { "refId": "A", "expr": "max by (job) (labapp_job_active)", "legendFormat": "{{job}}" } ],
+      "targets": [ { "refId": "A", "expr": "max by (job_name) (labapp_job_active)", "legendFormat": "{{job_name}}" } ],
       "fieldConfig": {
         "defaults": {
           "mappings": [ { "type": "value", "options": { "0": { "text": "idle", "color": "transparent", "index": 0 }, "1": { "text": "running", "color": "blue", "index": 1 } } } ],
@@ -376,7 +376,7 @@
       "description": "Duration of the last run of each report and batch job.",
       "gridPos": { "x": 16, "y": 44, "w": 8, "h": 7 },
       "datasource": { "type": "prometheus", "uid": "${datasource}" },
-      "targets": [ { "refId": "A", "expr": "max by (job) (labapp_job_last_duration_seconds)", "legendFormat": "{{job}}", "instant": true } ],
+      "targets": [ { "refId": "A", "expr": "max by (job_name) (labapp_job_last_duration_seconds)", "legendFormat": "{{job_name}}", "instant": true } ],
       "fieldConfig": { "defaults": { "unit": "s", "decimals": 0, "min": 0, "color": { "mode": "continuous-BlYlRd" } }, "overrides": [] },
       "options": { "orientation": "horizontal", "displayMode": "basic", "showUnfilled": true, "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false } }
     }

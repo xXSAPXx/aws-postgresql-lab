@@ -75,9 +75,10 @@ class Metrics:
         self.target_rate = Gauge("labapp_load_target_rate", "Current target rate: base x wave x flash sale")
         self.flash_sale = Gauge("labapp_load_flash_sale", "1 during a flash sale")
         self.paused = Gauge("labapp_load_paused", "1 while the workload is paused")
-        self.job_active = Gauge("labapp_job_active", "1 while a long-running report or batch job runs", ["job"])
-        self.job_runs = Counter("labapp_job_runs", "Report and batch job runs by result", ["job", "result"])
-        self.job_duration = Gauge("labapp_job_last_duration_seconds", "Duration of the last run", ["job"])
+        # The label is job_name, not job: Prometheus keeps "job" for the scrape and would rename ours to exported_job.
+        self.job_active = Gauge("labapp_job_active", "1 while a long-running report or batch job runs", ["job_name"])
+        self.job_runs = Counter("labapp_job_runs", "Report and batch job runs by result", ["job_name", "result"])
+        self.job_duration = Gauge("labapp_job_last_duration_seconds", "Duration of the last run", ["job_name"])
 
 
 # ---- shop data -----------------------------------------------------------------------------------
