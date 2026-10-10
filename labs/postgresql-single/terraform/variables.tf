@@ -16,8 +16,7 @@ variable "admin_cidr" {
 }
 
 # Instance types: Rocky Linux 10 needs x86-64-v3 CPUs, so use a current (Nitro) type such as t3 or m7i, not t2.
-# t3 is burstable: under sustained load it runs out of CPU credits and is throttled to 20% of each vCPU,
-# which shows up in PMM as a slow database. For load tests use a non-burstable type, e.g. m7i.large (2 vCPU, 8 GB).
+# t3 is burstable (see cpu_credits below). For heavy load tests use a non-burstable type, e.g. m7i.large (2 vCPU, 8 GB).
 variable "postgresql_instance_type" {
   type        = string
   default     = "t3.small"
@@ -37,6 +36,22 @@ variable "pmm_instance_type" {
   validation {
     condition     = !startswith(var.pmm_instance_type, "t2.")
     error_message = "Rocky Linux 10 needs a current instance type (t3, m7i, ...), not t2."
+  }
+}
+
+# A t3 may use 20% of each vCPU continuously and more in bursts, paid for with CPU credits. It starts with none.
+#   unlimited: never throttled. CPU above the 20% is billed at $0.05 per vCPU-hour: well under a cent per hour
+#              with the default workload, at most $0.08 per hour for a server that runs flat out.
+#   standard:  fixed price. A server without credits is throttled to the 20%, which shows up in PMM as a slow
+#              database or a slow application.
+variable "cpu_credits" {
+  type        = string
+  default     = "unlimited"
+  description = "CPU credit mode of the burstable (t3) servers: unlimited or standard"
+
+  validation {
+    condition     = contains(["unlimited", "standard"], var.cpu_credits)
+    error_message = "cpu_credits must be \"unlimited\" or \"standard\"."
   }
 }
 

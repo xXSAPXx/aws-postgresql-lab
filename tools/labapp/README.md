@@ -175,6 +175,6 @@ The probe serves port 9300 and the workload port 9302 (`/metrics`), collected by
 | `labapp_tx_queue_depth` | Requests waiting for a free worker |
 | `labapp_load_base_rate`, `labapp_load_target_rate` | Base and current target rate, requests per second |
 | `labapp_load_flash_sale`, `labapp_load_paused` | 1 during a flash sale, 1 while paused |
-| `labapp_job_active{job}` | 1 while a report or batch job runs |
-| `labapp_job_runs_total{job, result}` | Job runs, `result` = ok / error |
-| `labapp_job_last_duration_seconds{job}` | Duration of the last run |
+| `labapp_job_active{job_name}` | 1 while a report or batch job runs |
+| `labapp_job_runs_total{job_name, result}` | Job runs, `result` = ok / error |
+| `labapp_job_last_duration_seconds{job_name}` | Duration of the last run |

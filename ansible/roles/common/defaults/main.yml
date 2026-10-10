@@ -1,4 +1,12 @@
 ---
+# Settings for /etc/dnf/dnf.conf. Rocky's mirror list hands out mirrors at random, and by default dnf stays
+# on a slow one as long as it sends 1,000 bytes per second: one such mirror made a server's first install
+# take 7 minutes. With these, dnf leaves a mirror that is slower than `minrate` for `timeout` seconds (or
+# doesn't answer within `timeout`) and tries the next one.
+common_dnf_options:
+  minrate: 250k
+  timeout: 10
+
 # Admin tools installed on every lab server.
 common_packages:
   - bash-completion

@@ -63,12 +63,12 @@ resource "aws_instance" "pmm_server" {
   vpc_security_group_ids = [aws_security_group.pmm_server_sg.id]
   key_name               = var.key_name
 
-  # Burstable types (t3...): "standard" throttles when CPU credits run out instead of
-  # billing extra like AWS's default for t3 ("unlimited"). Other types don't take this setting.
+  # Burstable types (t3...): "unlimited" never throttles and bills CPU above the baseline, "standard"
+  # throttles when the CPU credits run out (a t3 starts with none). Other types don't take this setting.
   dynamic "credit_specification" {
     for_each = startswith(var.instance_type, "t") ? [1] : []
     content {
-      cpu_credits = "standard"
+      cpu_credits = var.cpu_credits
     }
   }
 
