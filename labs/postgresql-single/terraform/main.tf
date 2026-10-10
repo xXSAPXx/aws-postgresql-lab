@@ -69,6 +69,7 @@ module "postgresql_ec2_instance" {
   # --- PostgreSQL_EC2_Instance Settings ---
   ami_id        = data.aws_ami.rocky_10.id
   instance_type = var.postgresql_instance_type
+  cpu_credits   = var.cpu_credits
   key_name      = var.aws_key_pair
   subnet_id     = module.vpc.private_subnet_1_id
   #iam_instance_profile   = module.iam_roles............
@@ -96,6 +97,7 @@ module "pmm_server" {
   # --- PMM_EC2_Instance Settings ---
   ami_id        = data.aws_ami.rocky_10.id
   instance_type = var.pmm_instance_type
+  cpu_credits   = var.cpu_credits
   key_name      = var.aws_key_pair
   subnet_id     = module.vpc.public_subnet_1_id
   #iam_instance_profile         = module.iam_roles............

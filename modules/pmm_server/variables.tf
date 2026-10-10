@@ -78,3 +78,9 @@ variable "pmm_tag_name" {
   type        = string
   default     = "pmm-server"
 }
+
+variable "cpu_credits" {
+  description = "Burstable types (t3...) only. \"unlimited\": never throttled, CPU above the baseline is billed. \"standard\": fixed price, throttled when the CPU credits run out"
+  type        = string
+  default     = "unlimited"
+}
