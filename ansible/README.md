@@ -44,7 +44,7 @@ A **role** is a folder of related steps, like one chapter of a runbook. Ansible 
 | `percona_release` | `ansible/roles/` | Installs `percona-release`, which manages the Percona repositories |
 | `pmm_server` | `ansible/roles/` | Docker, the PMM 3 container, the PMM admin password |
 | `pmm_client` | `ansible/roles/` | PMM client, registers the server with PMM, adds the databases to monitor; for PostgreSQL, a custom query that records who blocks whom |
-| `postgresql_tools` | `ansible/roles/` | Live monitoring on the database server: pg_activity (overview of sessions, waits, blocking) and pg_top (per-PID query, EXPLAIN, locks) |
+| `postgresql_tools` | `ansible/roles/` | Tools on the database server. Live: pg_activity (overview of sessions, waits, blocking) and pg_top (per-PID query, EXPLAIN, locks). From the server log: pgBadger (report of slow statements, lock waits, errors) |
 | `postgresql_client` | `ansible/roles/` | psql and pgbench on the load generator, database passwords in `~/.pgpass` |
 | `liquibase` | `ansible/roles/` | Java, Liquibase and the PostgreSQL JDBC driver on the PMM server; copies a changelog from the repo (e.g. `schema/shop`) and applies the pending migrations; `liquibase-<db>` wrapper command |
 | `labapp` | `ansible/roles/` | The lab's simulated application ([tools/labapp](../tools/labapp/README.md)): the availability probe and the shop workload as services, their metrics in PMM, the "Lab: Application" dashboard |
