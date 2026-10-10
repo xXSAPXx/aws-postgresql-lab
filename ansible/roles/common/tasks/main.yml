@@ -23,6 +23,19 @@
     group: root
     mode: "0644"
 
+# Before the first package install, which downloads every repository's metadata.
+- name: Make dnf leave slow mirrors
+  community.general.ini_file:
+    path: /etc/dnf/dnf.conf
+    section: main
+    option: "{{ item.key }}"
+    value: "{{ item.value }}"
+    no_extra_spaces: true
+    owner: root
+    group: root
+    mode: "0644"
+  loop: "{{ common_dnf_options | dict2items }}"
+
 - name: Install the EPEL repository
   ansible.builtin.dnf:
     name: https://dl.fedoraproject.org/pub/epel/epel-release-latest-{{ ansible_facts['distribution_major_version'] }}.noarch.rpm
