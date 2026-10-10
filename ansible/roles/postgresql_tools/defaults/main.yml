@@ -1,7 +1,10 @@
 ---
-# Live PostgreSQL monitoring tools on the database servers:
+# PostgreSQL tools on the database servers.
+# Live:
 #   pg_activity (Dalibo): top-like overview of sessions, queries, waits and blocking; cancel / terminate.
 #   pg_top: per-PID drill-down: current query (Q), EXPLAIN plan (E), locks (L), I/O.
+# From the server log:
+#   pgBadger: a report of slow statements, lock waits, errors, temporary files and checkpoints.
 
 # pg_activity has no EL10 RPM outside the PGDG repository, so it's installed from PyPI into its own virtualenv.
 postgresql_tools_pg_activity_venv: /opt/pg_activity
@@ -10,3 +13,10 @@ postgresql_tools_pg_activity_package: "pg_activity[psycopg]"
 # Installed with dnf (pg_top is in EPEL):
 postgresql_tools_packages:
   - pg_top
+  - perl-Benchmark # the one Perl module pgBadger needs that a minimal server lacks
+
+# pgBadger is one Perl script and has no EL10 package in the lab's repositories: it is downloaded from its
+# release tag and verified by checksum. To upgrade, change the version and the checksum together.
+postgresql_tools_pgbadger_version: "13.2"
+postgresql_tools_pgbadger_url: "https://raw.githubusercontent.com/darold/pgbadger/v{{ postgresql_tools_pgbadger_version }}/pgbadger"
+postgresql_tools_pgbadger_checksum: "sha256:ef8fe2c9ea3181d7eefa31ec46a6979b085b1ced9a8068f9e5fef334eb19ae41"

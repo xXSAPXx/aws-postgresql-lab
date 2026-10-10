@@ -132,7 +132,7 @@ Example of `labapp outages` after `systemctl restart postgresql-17` and a 10-sec
 
 ## The dashboard
 
-**Lab → Lab: Application** in PMM, in four rows:
+**Lab → Lab: Application** in PMM, in five rows:
 
 | Row | Shows |
 |---|---|
@@ -140,6 +140,7 @@ Example of `labapp outages` after `systemctl restart postgresql-17` and a 10-sec
 | **Availability (probe)** | Outages and downtime in the selected time range, the last outage, write latency, the UP / DOWN timeline, write and connect latency, checks per second |
 | **Shop workload** | Checkout p95, queued requests, transactions per second by type against the target rate, response time by type, errors by kind and by transaction |
 | **Reports and batch jobs** | When each report and batch job ran, and how long the last run took |
+| **Locks: who blocks whom** | Closed by default, because it names the culprit: the sessions at the root of lock waits with their statement, and how many sessions each one blocks (see the [lab README](../../labs/postgresql-single/README.md#locks-who-blocks-whom)) |
 
 Outages (red) and workload events (purple) are marked on every chart.
 

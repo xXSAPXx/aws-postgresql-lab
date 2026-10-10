@@ -41,3 +41,22 @@
     pmm_client_list.stdout is not search('(?m)^\\S+\\s+' ~ (item.name | regex_escape) ~ '\\s+\\S+:\\d+')
   changed_when: true
   no_log: true
+
+# PMM's exporter runs every file in this folder in each database, every 5 s (PMM's high resolution),
+# and picks up a new or changed file without a restart.
+- name: Install the lock blocking metrics for PostgreSQL
+  ansible.builtin.template:
+    src: lock-blocking.yml.j2
+    dest: "{{ pmm_client_custom_queries_dir }}/postgresql/high-resolution/lab-lock-blocking.yml"
+    owner: pmm-agent
+    group: pmm-agent
+    mode: "0640"
+  when:
+    - pmm_client_lock_blocking_enabled | bool
+    - pmm_client_services | selectattr('type', 'equalto', 'postgresql') | list | length > 0
+
+- name: Remove the lock blocking metrics for PostgreSQL when they are switched off
+  ansible.builtin.file:
+    path: "{{ pmm_client_custom_queries_dir }}/postgresql/high-resolution/lab-lock-blocking.yml"
+    state: absent
+  when: not (pmm_client_lock_blocking_enabled | bool)

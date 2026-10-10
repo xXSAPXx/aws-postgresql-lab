@@ -121,6 +121,27 @@ sudo -iu postgres pg_top         # drill down into one PID
 - **[pg_activity](https://github.com/dalibo/pg_activity)**: all sessions with their queries, waits and per-process CPU / memory / IO. `F1` / `F2` / `F3` show running / waiting / blocking queries; select a process with the arrow keys and press `C` to cancel or `K` to terminate it. `h` lists all keys.
 - **[pg_top](https://pg_top.gitlab.io/)**: press a key, then enter a PID. `Q` shows its full query, `E` its EXPLAIN plan, `L` the locks it holds. `A` runs EXPLAIN ANALYZE, which **executes the statement again**, so never use it on an UPDATE or DELETE.
 
+### A report from the server log: pgBadger
+
+[pgBadger](https://github.com/darold/pgbadger) is installed on the database server for when you need it. It turns PostgreSQL's log into one HTML report: the slowest and most frequent slow statements (over 500 ms), lock waits, errors, temporary files, checkpoints and autovacuum runs. It only reads the log files, so it costs the database nothing. Nothing runs on a schedule.
+
+```bash
+ssh postgresql-source
+sudo -iu postgres bash -c 'pgbadger --prefix "%m [%p] %q%u@%d app=%a client=%h " -f stderr --outdir /tmp -o pgbadger.html /var/lib/pgsql/17/data/log/postgresql-*.log'
+```
+
+- `--prefix` must match the server's `log_line_prefix` exactly, or pgBadger finds nothing in the log.
+- The command runs through `bash -c` as `postgres`, because only that user can read the log directory and expand the `*`.
+- For a report you can read in the terminal, use `-o pgbadger.txt`.
+
+The report is one self-contained file. Copy it to your machine and open it in a browser:
+
+```bash
+scp postgresql-source:/tmp/pgbadger.html .
+```
+
+For locks, look at **Locks → Most frequent waiting queries** and **Events → Most frequent errors/events**. The waiting-queries ranking only counts waits that ended by getting the lock; waits cancelled by a lock timeout are under Events. The log holds one file per weekday, so a report covers at most the last seven days.
+
 ## Measure downtime
 
 While the lab runs, the [labapp probe](../../tools/labapp/README.md) on the PMM server writes to PostgreSQL four times a second, like an application would. Whatever you do to the database, it measures what the application experiences: every outage with its exact start, end and duration, and the write and connect latency.
@@ -133,6 +154,24 @@ While the lab runs, the [labapp probe](../../tools/labapp/README.md) on the PMM 
   ```
 
 Try it: `ssh postgresql-source`, run `sudo systemctl restart postgresql-17`, then check `labapp outages`. A restart costs the application about a second of write downtime.
+
+## Locks: who blocks whom
+
+PostgreSQL keeps no history of lock waits, and PMM has no view of them for PostgreSQL: Query Analytics has no lock time, and the dashboards only count locks by type. What the server gives you:
+
+| Where | Shows | History |
+|---|---|---|
+| pg_activity (`F2` waiting, `F3` blocking), or `pg_stat_activity` with `pg_blocking_pids()` | Blocker and waiting sessions, with their statements | Live only |
+| The server log, `/var/lib/pgsql/17/data/log/` (`log_lock_waits`), raw or as a [pgBadger report](#a-report-from-the-server-log-pgbadger) | Every wait longer than 1 s: the waiting statement, the table, the blocker's process ID | Yes. Find the blocker with `sudo grep '\[<pid>\]'` in the same log; it's only there if one of its statements took longer than 500 ms |
+
+The lab adds the missing piece to PMM. A custom query of the PMM client samples `pg_stat_activity` every 5 seconds and records the sessions at the **root** of lock waits: their user, application, state and statement, and how many sessions wait behind each. See the **Locks: who blocks whom** row of the **Lab → Lab: Application** dashboard. The row is closed by default, because it names the culprit of the exercises.
+
+- **Root blocker:** PostgreSQL reports sessions queued on the same row as blocking each other. The query follows each queue back to the session that is in the way and is not waiting itself.
+- **Only persisting blockers:** a healthy database has many lock waits of a few milliseconds. A blocker is reported once its transaction has been open for 1 second (`pmm_client_lock_blocking_min_seconds`). The filter is on the blocker, not on the waiting sessions: the application gives up after its `lock_timeout` of 2 s, so no session ever waits long, even while one blocker stops the checkouts for 90 seconds.
+- **The statement is the blocker's current one,** which is not always the one that took the lock.
+- **It samples,** so a blocker that comes and goes between two samples is missed. Each sample costs about 1 ms per database.
+
+The metrics are `pg_lock_blocking_sessions` and `pg_lock_blocking_transaction_seconds` (per root blocker), and `pg_lock_waiting_sessions` (every session waiting on a lock, however briefly). Switch them off with `pmm_client_lock_blocking_enabled: false`.
 
 ## Break, fix, reset
 
