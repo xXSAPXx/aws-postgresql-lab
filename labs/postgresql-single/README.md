@@ -134,6 +134,24 @@ While the lab runs, the [labapp probe](../../tools/labapp/README.md) on the PMM 
 
 Try it: `ssh postgresql-source`, run `sudo systemctl restart postgresql-17`, then check `labapp outages`. A restart costs the application about a second of write downtime.
 
+## Locks: who blocks whom
+
+PostgreSQL keeps no history of lock waits, and PMM has no view of them for PostgreSQL: Query Analytics has no lock time, and the dashboards only count locks by type. What the server gives you:
+
+| Where | Shows | History |
+|---|---|---|
+| pg_activity (`F2` waiting, `F3` blocking), or `pg_stat_activity` with `pg_blocking_pids()` | Blocker and waiting sessions, with their statements | Live only |
+| The server log, `/var/lib/pgsql/17/data/log/` (`log_lock_waits`) | Every wait longer than 1 s: the waiting statement, the table, the blocker's process ID | Yes. Find the blocker with `sudo grep '\[<pid>\]'` in the same log; it's only there if one of its statements took longer than 500 ms |
+
+The lab adds the missing piece to PMM. A custom query of the PMM client samples `pg_stat_activity` every 5 seconds and records the sessions at the **root** of lock waits: their user, application, state and statement, and how many sessions wait behind each. See the **Locks: who blocks whom** row of the **Lab → Lab: Application** dashboard. The row is closed by default, because it names the culprit of the exercises.
+
+- **Root blocker:** PostgreSQL reports sessions queued on the same row as blocking each other. The query follows each queue back to the session that is in the way and is not waiting itself.
+- **Only persisting blockers:** a healthy database has many lock waits of a few milliseconds. A blocker is reported once its transaction has been open for 1 second (`pmm_client_lock_blocking_min_seconds`). The filter is on the blocker, not on the waiting sessions: the application gives up after its `lock_timeout` of 2 s, so no session ever waits long, even while one blocker stops the checkouts for 90 seconds.
+- **The statement is the blocker's current one,** which is not always the one that took the lock.
+- **It samples,** so a blocker that comes and goes between two samples is missed. Each sample costs about 1 ms per database.
+
+The metrics are `pg_lock_blocking_sessions` and `pg_lock_blocking_transaction_seconds` (per root blocker), and `pg_lock_waiting_sessions` (every session waiting on a lock, however briefly). Switch them off with `pmm_client_lock_blocking_enabled: false`.
+
 ## Break, fix, reset
 
 Break whatever you like on the servers. Running `ansible-playbook site.yml` again puts everything Ansible manages back into the known-good state: packages, configuration files, the `pmm` user, services and the PMM registration. It changes only what differs. It does not restore data you deleted.

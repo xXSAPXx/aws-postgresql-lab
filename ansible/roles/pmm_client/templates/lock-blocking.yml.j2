@@ -1,0 +1,78 @@
+# Managed by Ansible (role: pmm_client).
+# Custom queries for PMM's PostgreSQL exporter: who blocks whom. PostgreSQL keeps no history of lock waits,
+# so PMM samples them. The exporter runs each query in every database, at PMM's high resolution (5 s).
+
+# The sessions at the root of lock waits, with their statement, and how many sessions wait behind each.
+#
+# PostgreSQL reports sessions queued on the same row as blocking each other, so the query walks each
+# queue back to its root: the session that is in the way and is not waiting on a lock itself.
+#
+# Only root blockers whose transaction has been open for {{ pmm_client_lock_blocking_min_seconds }} s or more are reported: a healthy database has
+# many short lock waits, and the problem is the lock that persists. The filter is on the blocker, not on
+# the waiting sessions, because a session that gives up after its lock_timeout never waits for long,
+# even when the same blocker stops the application for minutes.
+pg_lock_blocking:
+  query: |
+    WITH RECURSIVE waiting AS (
+        SELECT a.pid, b.pid AS blocker_pid
+        FROM pg_stat_activity a
+        CROSS JOIN LATERAL unnest(pg_blocking_pids(a.pid)) AS b(pid)
+        WHERE a.wait_event_type = 'Lock' AND a.datname = current_database()
+    ), chain AS (
+        SELECT DISTINCT w.blocker_pid AS root_pid, w.pid AS waiting_pid
+        FROM waiting w
+        WHERE w.blocker_pid NOT IN (SELECT pid FROM waiting)
+      UNION
+        SELECT c.root_pid, w.pid
+        FROM chain c
+        JOIN waiting w ON w.blocker_pid = c.waiting_pid
+    )
+    SELECT current_database() AS datname,
+           coalesce(r.usename, r.backend_type) AS blocking_user,
+           coalesce(nullif(r.application_name, ''), r.backend_type) AS blocking_application,
+           coalesce(r.state, '') AS blocking_state,
+           left(regexp_replace(r.query, '\s+', ' ', 'g'), 100) AS blocking_query,
+           count(DISTINCT c.waiting_pid) AS sessions,
+           max(extract(epoch FROM clock_timestamp() - coalesce(r.xact_start, r.state_change))) AS transaction_seconds
+    FROM chain c
+    JOIN pg_stat_activity r ON r.pid = c.root_pid
+    WHERE coalesce(r.xact_start, r.state_change) <= clock_timestamp() - make_interval(secs => {{ pmm_client_lock_blocking_min_seconds }})
+    GROUP BY 1, 2, 3, 4, 5
+    ORDER BY sessions DESC
+    LIMIT 20
+  metrics:
+    - datname:
+        usage: "LABEL"
+        description: "Database of the waiting sessions"
+    - blocking_user:
+        usage: "LABEL"
+        description: "User of the root blocker"
+    - blocking_application:
+        usage: "LABEL"
+        description: "application_name of the root blocker"
+    - blocking_state:
+        usage: "LABEL"
+        description: "State of the root blocker: active, or idle in transaction"
+    - blocking_query:
+        usage: "LABEL"
+        description: "Current or last statement of the root blocker, first 100 characters"
+    - sessions:
+        usage: "GAUGE"
+        description: "Sessions waiting on a lock behind this root blocker, directly or in a queue"
+    - transaction_seconds:
+        usage: "GAUGE"
+        description: "Seconds the root blocker's transaction has been open"
+
+# Every session waiting on a lock right now, however briefly: the total, without the filter above.
+pg_lock_waiting:
+  query: |
+    SELECT current_database() AS datname, count(*) AS sessions
+    FROM pg_stat_activity
+    WHERE wait_event_type = 'Lock' AND datname = current_database()
+  metrics:
+    - datname:
+        usage: "LABEL"
+        description: "Database of the waiting sessions"
+    - sessions:
+        usage: "GAUGE"
+        description: "Sessions waiting on a lock"

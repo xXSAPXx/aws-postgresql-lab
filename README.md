@@ -31,7 +31,7 @@ ansible/roles/        Shared Ansible roles, used by every lab (how it works: ans
   data_volume/        Formats and mounts a database server's EBS data volume
   percona_release/    Percona repository tool
   pmm_server/         PMM 3 in Docker, admin password
-  pmm_client/         PMM client, registration, monitored services
+  pmm_client/         PMM client, registration, monitored services, lock blocking metrics
   postgresql_client/  psql and pgbench on the load generator
   postgresql_tools/   Live monitoring on the database server: pg_activity, pg_top
   liquibase/          Applies a database's SQL migrations from the repo
