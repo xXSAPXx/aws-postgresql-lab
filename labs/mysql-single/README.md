@@ -153,7 +153,7 @@ The bucket keeps whatever you put there until the lab is destroyed: delete old b
 
 **The binlogs** are where the binlog backup script in `dba-ops-scripts` expects them: in `/var/lib/mysql`, named `mysql-bin.NNNNNN`.
 
-**The backup scripts for this lab** are the AWS versions in `dba-ops-scripts` (`mysql_prod_backup_script/`): `mysql_backup_v3_aws.sh` (full backups) and `mysql_binlog_backup_v2_aws.sh` (binlogs). They are the production scripts with the upload to S3 instead of Google Cloud Storage. Before the first run, set `S3_BUCKET` at the top of each: `$BACKUP_S3` for the full backups, `$BACKUP_S3/binlog_backups` for the binlogs. They log in to MySQL with `--login-path=local`, which falls back to root's `/root/.my.cnf` here.
+**The backup scripts for this lab** are the AWS versions in `dba-ops-scripts` (`mysql_prod_backup_scripts/`): `mysql_backup_v3_aws.sh` (full backups) and `mysql_binlog_backup_v2_aws.sh` (binlogs). They are the production scripts with the upload to S3 instead of Google Cloud Storage. Before the first run, set `S3_BUCKET` at the top of each: `$BACKUP_S3` for the full backups, `$BACKUP_S3/binlog_backups` for the binlogs. They log in to MySQL with `--login-path=local`, which falls back to root's `/root/.my.cnf` here.
 
 ## Destroy
 
